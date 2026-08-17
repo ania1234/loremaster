@@ -7,5 +7,6 @@ __pycache__/
 node_modules/
 .next/
 .DS_Store
+.vscode/
 data/
 uploads/
