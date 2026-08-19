@@ -1,0 +1,25 @@
+[project]
+name = "loremaster"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ania1234", email = "anna.sierhej@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "dotenv>=0.9.9",
+    "litellm>=1.97.0",
+    "numpy>=2.5.2",
+    "pgvector>=0.5.0",
+    "pip>=26.2.1",
+    "psycopg>=3.3.4",
+    "sqlalchemy>=2.0.52",
+]
+
+[project.scripts]
+loremaster = "loremaster:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
