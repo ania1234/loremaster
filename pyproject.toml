@@ -8,8 +8,10 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.19.1",
     "dotenv>=0.9.9",
     "litellm>=1.97.0",
+    "matplotlib>=3.11.1",
     "numpy>=2.5.2",
     "pgvector>=0.5.0",
     "pip>=26.2.1",
@@ -19,6 +21,7 @@ dependencies = [
     "pymupdf>=1.28.2",
     "pymupdf4llm>=1.28.2",
     "sqlalchemy>=2.0.52",
+    "tiktoken>=0.14.0",
 ]
 
 [project.scripts]
