@@ -23,6 +23,8 @@ def store_document(path: str, user_id: str, doc_type: str) -> bool:
     title = file_path.name
     uid = uuid.UUID(user_id)
 
+    print(f"started document store for {title}")
+
     if is_scanned(file_path):
         raise ValueError("document appears to be a scan with no text layer")
 
@@ -32,23 +34,35 @@ def store_document(path: str, user_id: str, doc_type: str) -> bool:
         raise ValueError("no chunks produced from document")
 
     embeddings = embed_chunks(chunks)
+    file_hash = _file_hash(path)
 
     if len(embeddings) != len(chunks):
         raise ValueError("Embeddings count different than chunks")
     
     with SessionLocal() as session:
         try:
-            document = Document(
-                user_id=uid,
-                title=title,
-                doc_type=doc_type,
-                storage_path=str(file_path),
-                page_count=len(pages),
-                status="ready",
+            document = (
+                session.query(Document)
+                .filter_by(user_id=uid, file_hash=file_hash)
+                .first()
             )
-            session.add(document)
-            session.flush()  # assigns document.id without committing yet
-
+            if document is None:
+                document = Document(
+                    user_id=uid,
+                    title=title,
+                    doc_type=doc_type,
+                    storage_path=str(file_path),
+                    page_count=len(pages),
+                    status="pending",
+                    file_hash=file_hash,
+                )
+                session.add(document)
+                session.flush()  # assigns document.id without committing yet
+            else:
+                if document.status == "ready":
+                    print("Document already stored")
+                    return True
+                
             session.add_all(
                 ChunkRow(
                     document_id=document.id,
