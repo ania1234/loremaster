@@ -8,10 +8,12 @@ from app.db.models import Document, SessionLocal
 from app.ingestion.chunk import chunk_document
 from app.ingestion.embed import embed_chunks
 from app.ingestion.extract import extract_pages, is_scanned
+from app.ingestion.normalise import normalise
 
 """Store a pdf
 
-    python app/db/store.py "data/Reincarnated as the Unlovable Villainess.pdf"
+    python app/db/store.py "data/Reincarnated as the Unlovable Villainess.pdf" "00000000-0000-0000-0000-000000000000" "ruleset"
+    python app/db/store.py "data/sesja.md" "00000000-0000-0000-0000-000000000000" "transcript"
 """
 
 def _file_hash(path: Path) -> str:
@@ -25,11 +27,13 @@ def store_document(path: str, user_id: str, doc_type: str) -> bool:
 
     print(f"started document store for {title}")
 
-    if is_scanned(file_path):
+    if doc_type == "ruleset" and is_scanned(file_path):
         raise ValueError("document appears to be a scan with no text layer")
 
-    pages = extract_pages(file_path)
-    chunks = chunk_document(pages)
+    pages = extract_pages(file_path, doc_type)
+    if doc_type == "ruleset":
+        pages = normalise(pages)
+    chunks = chunk_document(pages, doc_type)
     if not chunks:
         raise ValueError("no chunks produced from document")
 

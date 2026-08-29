@@ -39,7 +39,7 @@ def _markdown_in(path: Path, page_no: int, clip: pymupdf.Rect | None) -> str:
     finally:
         doc.close()
 
-def extract_page(path: Path, page_no: int) -> Page:
+def extract_page(path: Path, page_no: int, doc_type: str) -> Page:
     doc = pymupdf.open(path)
     page = doc[page_no]
     width = page.rect.width
@@ -60,12 +60,12 @@ def extract_page(path: Path, page_no: int) -> Page:
 
     return Page(page_no + 1, "\n\n".join(p for p in parts if p), len(columns))
 
-def extract_pages(path: Path) -> list[Page]:
+def extract_pages(path: Path, doc_type: str) -> list[Page]:
     """Same signature as L15 -- everything downstream is unaffected."""
     doc = pymupdf.open(path)
     count = doc.page_count
     doc.close()
-    return [extract_page(path, i) for i in range(count)]
+    return [extract_page(path, i, doc_type) for i in range(count)]
 
 def extract_first_try(path: Path) -> list[Page]:
     """Markdown per page, headings preserved, page numbers retained."""

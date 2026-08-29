@@ -6,7 +6,6 @@ from app.ingestion.extract import Page
 from app.ingestion.tokens import count_tokens
 
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
-TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 
 @dataclass
 class Chunk:
@@ -40,40 +39,87 @@ def _sections(pages: list[Page]):
     if buf and any(x.strip() for x in buf):
         yield " > ".join(stack), "\n".join(buf), start_page, end_page
 
+def _is_table(paragraph: str) -> bool:
+    """A markdown pipe table: every non-blank line starts with '|'."""
+    lines = [ln for ln in paragraph.splitlines() if ln.strip()]
+    return bool(lines) and all(ln.lstrip().startswith("|") for ln in lines)
+
 def _split_paragraphs(text: str, max_tok: int, overlap_tok: int) -> list[str]:
-    """Split oversized text on blank lines; never break a table."""
-    blocks, current, in_table = [], [], False
-    for para in text.split("\n\n"):
-        is_table = bool(TABLE_ROW.match(para.strip().splitlines()[0])) if para.strip() else False
-        if is_table:
-            if current:
-                blocks.append("\n\n".join(current)); current = []
-            blocks.append(para)          # table stays whole, whatever its size
-        else:
-            current.append(para)
-    if current:
-        blocks.append("\n\n".join(current))
+    """Split text on blank lines, then greedily pack paragraphs into
+    overlapping chunks of roughly max_tok tokens, never splitting a
+    paragraph or a table across chunks."""
+    paragraphs = [p for p in text.split("\n\n") if p.strip()]
 
-    out, buf = [], []
-    for block in blocks:
-        candidate = buf + [block]
-        if count_tokens("\n\n".join(candidate)) > max_tok and buf:
-            out.append("\n\n".join(buf))
-            # carry the tail of the previous chunk forward as overlap
-            tail, tail_tokens = [], 0
-            for prev in reversed(buf):
-                tail_tokens += count_tokens(prev)
-                tail.insert(0, prev)
-                if tail_tokens >= overlap_tok:
+    chunks: list[str] = []
+    current: list[str] = []
+    current_tok = 0
+
+    for para in paragraphs:
+        para_tok = count_tokens(para)
+
+        if current and current_tok + para_tok > max_tok:
+            chunks.append("\n\n".join(current))
+
+            # start the next chunk with trailing paragraphs from this one,
+            # kept whole, that add up to roughly overlap_tok tokens; a table
+            # is never duplicated into the overlap, however big it is
+            carry: list[str] = []
+            carry_tok = 0
+            for p in reversed(current):
+                if _is_table(p):
                     break
-            buf = tail + [block]
-        else:
-            buf = candidate
-    if buf:
-        out.append("\n\n".join(buf))
-    return out
+                p_tok = count_tokens(p)
+                if carry and carry_tok + p_tok > overlap_tok:
+                    break
+                carry.insert(0, p)
+                carry_tok += p_tok
+            current, current_tok = carry, carry_tok
 
-def chunk_document(pages: list[Page]) -> list[Chunk]:
+        current.append(para)
+        current_tok += para_tok
+
+    if current:
+        chunks.append("\n\n".join(current))
+
+    return chunks
+
+def chunk_transcript(pages: list[Page]) -> list[Chunk]:
+    # For learning purposes, the transcript is split on each dialogue line so
+    # every chunk is at most 3 lines (prev, main, next). This gives reciprocal
+    # rank fusion something to actually fuse over (otherwise there were only 3
+    # chunks, and the LLM inferred correctly from those 3).
+
+    # Flatten every non-blank line, remembering the page it came from.
+    lines: list[str] = []
+    for page in pages:
+        for ln in page.markdown.splitlines():
+            if ln.strip():
+                lines.append(ln.strip())
+
+    if not lines:
+        return []
+
+    chunk_title = lines[0]
+    chunks: list[Chunk] = []
+    for i in range(len(lines)):
+        lo, hi = max(0, i - 1), min(len(lines), i + 2)
+        content = "\n\n".join(lines[lo:hi])
+        chunks.append(Chunk(
+            content=content,
+            heading_path=chunk_title,
+            page_from=i,
+            page_to=i,
+            ordinal=i,
+            token_count=count_tokens(content),
+        ))
+    return chunks
+
+
+def chunk_document(pages: list[Page], doc_type : str) -> list[Chunk]:
+
+    if doc_type == "transcript":
+        return chunk_transcript(pages)
+
     max_tok = settings.chunk_max_tokens
     min_tok = settings.chunk_min_tokens
     overlap = settings.chunk_overlap_tokens
