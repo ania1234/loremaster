@@ -2,9 +2,9 @@ import uuid
 from datetime import date, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import (Date, DateTime, ForeignKey, Integer, String, Text,
-                        create_engine, func)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import (Computed, Date, DateTime, ForeignKey, Index, Integer,
+                        String, Text, create_engine, func)
+from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from app.config import settings
@@ -53,16 +53,18 @@ class Chunk(Base):
     page_to: Mapped[int | None] = mapped_column(Integer)
     token_count: Mapped[int] = mapped_column(Integer)
     embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dim))
+    notes: Mapped[str | None] = mapped_column(Text)
+    tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', content)", persisted=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now())
 
-
-""" run in psql to add these columns and indexes after creating tables with SQLAlchemy:
-ALTER TABLE chunks
-  ADD COLUMN tsv tsvector
-  GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
-
-CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX ON chunks USING gin (tsv);
-CREATE INDEX ON chunks (user_id, document_id, ordinal); 
-"""
+    __table_args__ = (
+        Index("ix_chunks_embedding_hnsw", "embedding",
+              postgresql_using="hnsw",
+              postgresql_ops={"embedding": "vector_cosine_ops"}),
+        Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
+        Index("ix_chunks_user_id_document_id_ordinal",
+              "user_id", "document_id", "ordinal"),
+    )
