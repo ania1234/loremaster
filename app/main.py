@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.models import SessionLocal
+from app.routers import documents
 
 
 def get_db():
@@ -26,6 +27,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Loremaster API", lifespan=lifespan)
+
+app.include_router(documents.router)
 
 app.add_middleware(
     CORSMiddleware,

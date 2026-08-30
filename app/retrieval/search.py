@@ -59,7 +59,7 @@ def hybrid_search(user_id: uuid.UUID, query: str, limit: int | None = None):
 if __name__ == "__main__":
     import uuid
     user_id = "00000000-0000-0000-0000-000000000000"
-    question = "what should I eat for breakfast"
+    question = "Is Peter a warlock"
     search_result = vector_search(uuid.UUID(user_id), question, 8)
     for row in search_result:
         print(row['content'][:200])
