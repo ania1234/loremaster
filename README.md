@@ -1,7 +1,11 @@
+This project is a step by step implementation of a tutorial spewed out for me by Claude. The full tutorial can be found in the Tutorial folder. Obviously not all of it makes sense, so I try to fill in the blanks as I go along.
+
 # Design Document — Grounded Q&A over Private Game Materials
 
 **Working name:** Loremaster
+
 **Purpose of the project:** learning how to integrate LLMs with a real-world use case.
+
 **Status:** design locked, not yet implemented.
 
 ---
