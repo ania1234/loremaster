@@ -1,0 +1,27 @@
+- id: q01
+  question: "What are the harm levels?"
+  kind: factual
+  expected_answer: "Lesser, moderate, severe -- plus the house rule 'grievous'."
+  expected_chunk_ids: ["<paste-real-uuid>", "<paste-real-uuid>"]
+  should_refuse: false
+
+- id: q02
+  question: "Was Peter's character a warlock in our March 2025 session?"
+  kind: metadata_filtered
+  expected_answer: "Yes -- he casts Eldritch Blast in the 2025-03-14 session."
+  expected_chunk_ids: ["<paste-real-uuid>"]
+  should_refuse: false
+
+- id: q03
+  question: "List every injury type in the ruleset."
+  kind: aggregative
+  expected_answer: "The complete list from the Injury chapter."
+  expected_chunk_ids: ["<uuid>", "<uuid>", "<uuid>", "<uuid>"]
+  should_refuse: false
+
+- id: q04
+  question: "What is the price of a longsword?"
+  kind: unanswerable
+  expected_answer: null
+  expected_chunk_ids: []
+  should_refuse: true
