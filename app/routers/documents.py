@@ -2,11 +2,11 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import (APIRouter, Depends, File, Form, HTTPException, UploadFile,
-                     status)
+from fastapi import (APIRouter, Depends, File, Form, HTTPException, Request,
+                     UploadFile, status)
 from sqlalchemy.orm import Session
 
-from app import limiter
+from app.limiter import limiter
 from app.db.models import Document
 from app.db.session import get_db
 from app.ingestion.extract import is_scanned
@@ -23,6 +23,7 @@ UPLOAD_DIR = Path("data/uploads")
              response_model=DocumentCreated)
 @limiter.limit("1/minute")
 async def upload(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     doc_type: str = Form(...),
@@ -53,7 +54,8 @@ async def upload(
 
 
 @router.get("", response_model=list[DocumentOut])
-async def list_documents(db: Session = Depends(get_db)):
+@limiter.limit("1/minute")
+async def list_documents(request: Request, db: Session = Depends(get_db)):
     return (db.query(Document)
               .filter(Document.user_id == DEV_USER)
               .order_by(Document.created_at.desc())
