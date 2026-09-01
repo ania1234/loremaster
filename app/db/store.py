@@ -20,9 +20,9 @@ def _file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def store_document(path: str, user_id: str, doc_type: str) -> bool:
+def store_document(path: str, user_id: str, doc_type: str, title: str | None = None) -> bool:
     file_path = Path(path)
-    title = file_path.name
+    title = title or file_path.name
     uid = uuid.UUID(user_id)
 
     print(f"started document store for {title}")
@@ -98,4 +98,5 @@ if __name__ == "__main__":
     path = Path(sys.argv[1])
     user_id = sys.argv[2] if len(sys.argv) > 2 else "00000000-0000-0000-0000-000000000000"
     doc_type = sys.argv[3] if len(sys.argv) > 3 else "ruleset"
-    store_document(path, user_id, doc_type)
+    title = sys.argv[4] if len(sys.argv) > 4 else None
+    store_document(path, user_id, doc_type, title)

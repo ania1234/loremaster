@@ -1,12 +1,15 @@
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import (APIRouter, Depends, File, Form, HTTPException, UploadFile,
                      status)
 from sqlalchemy.orm import Session
 
+from app import limiter
 from app.db.models import Document
-from app.main import get_db
+from app.db.session import get_db
+from app.ingestion.extract import is_scanned
 from app.schemas import DocumentCreated, DocumentOut
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -18,6 +21,7 @@ UPLOAD_DIR = Path("data/uploads")
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED,
              response_model=DocumentCreated)
+@limiter.limit("1/minute")
 async def upload(
     file: UploadFile = File(...),
     title: str = Form(...),
@@ -28,20 +32,23 @@ async def upload(
     if not ext.endswith((".pdf", ".md")):
         raise HTTPException(400, "only PDF and md files are supported")
 
+    data = await file.read()
+
+    if ext == ".pdf" and is_scanned(data):
+        raise HTTPException(422, "this PDF appears to be a scan with no text layer")
+
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     doc_id = uuid.uuid4()
     path = UPLOAD_DIR / f"{doc_id}.{ext}"
-    path.write_bytes(await file.read())
-
-    doc = Document(id=doc_id, user_id=DEV_USER, title=title,
-                   doc_type=doc_type, storage_path=str(path), status="pending")
-    db.add(doc)
-    db.commit()
+    path.write_bytes(data)
 
     # SEAM: in Lesson 37 this becomes `await redis.enqueue_job("ingest", doc_id)`
-    from app.ingestion.pipeline import ingest_document
-    ingest_document(doc_id)
+    from app.db.store import store_document
+    result = store_document(path, str(DEV_USER), doc_type, title)
 
+    if not result:
+        path.delete()  # cleanup
+        raise HTTPException(500, "failed to store document")
     return DocumentCreated(id=doc_id, status="pending")
 
 

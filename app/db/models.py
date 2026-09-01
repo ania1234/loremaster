@@ -53,7 +53,6 @@ class Chunk(Base):
     page_to: Mapped[int | None] = mapped_column(Integer)
     token_count: Mapped[int] = mapped_column(Integer)
     embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dim))
-    notes: Mapped[str | None] = mapped_column(Text)
     tsv: Mapped[str | None] = mapped_column(
         TSVECTOR,
         Computed("to_tsvector('english', content)", persisted=True))

@@ -13,10 +13,13 @@ class Page:
     column_count: int = 1
 
 
-def is_scanned(path: Path, min_chars_per_page: int = 100) -> bool:
+def is_scanned(src: Path | bytes, min_chars_per_page: int = 100) -> bool:
     """Design doc section 6, step 0: sample pages, not just the first one.
     Art-heavy pages in a real text PDF can be sparse too."""
-    doc = pymupdf.open(path)
+    if isinstance(src, (bytes, bytearray)):
+        doc = pymupdf.open(stream=src, filetype="pdf")
+    else:
+        doc = pymupdf.open(src)
     n = doc.page_count
     sample_idx = sorted({0, n // 2, n - 1, *range(0, n, max(1, n // 8))})
     lengths = [len(doc[i].get_text().strip()) for i in sample_idx if i < n]

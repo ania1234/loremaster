@@ -2,21 +2,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.db.models import SessionLocal
+from app.db.session import get_db
 from app.routers import documents
-
-
-def get_db():
-    """One session per request, always closed. Injected with Depends."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+from app.limiter import limiter
 
 
 @asynccontextmanager
@@ -29,7 +24,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Loremaster API", lifespan=lifespan)
 
 app.include_router(documents.router)
-
+app.add_middleware(SlowAPIMiddleware)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],   # the Next.js dev server
