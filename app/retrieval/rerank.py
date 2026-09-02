@@ -7,7 +7,7 @@ from app.config import settings
 
 PROMPT = """Score each passage 0-10 for how well it helps answer the question.
 10 = directly answers it. 0 = unrelated.
-Return ONLY a JSON object: {"scores": [{"i": 0, "s": 7}, ...]}
+Return ONLY a JSON object: {{"scores": [{{"i": 0, "s": 7}}, ...]}}
 Include every passage index exactly once.
 
 Question: {question}

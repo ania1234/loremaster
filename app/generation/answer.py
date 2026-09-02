@@ -29,6 +29,7 @@ def verify_citations(answer: str, n_sources: int) -> list[int]:
 def generate(question: str, context: str, n_sources: int) -> tuple[str, bool]:
     def call() -> str:
         return completion(
+            stream=False,
             model=settings.chat_model,
             temperature=settings.temperature,
             messages=[
