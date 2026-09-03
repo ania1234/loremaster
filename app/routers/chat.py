@@ -3,22 +3,21 @@ import re
 import sys
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from litellm import completion
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from app.auth import get_current_user
 from app.config import settings
-from app.generation import answer
 from app.generation.answer import SYSTEM, generate, verify_citations
 from app.generation.context import build_context
+from app.limiter import limiter
 from app.retrieval.rerank import rerank
 from app.retrieval.search import hybrid_search
-from app.limiter import limiter
 from app.schemas import AnswerOut, Citation
 
 router = APIRouter(prefix="/api", tags=["chat"])
-DEV_USER = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 class ChatRequest(BaseModel):
@@ -45,10 +44,14 @@ def prune_citations(citations: list[Citation], answer: str) -> list[Citation]:
 
 @router.post("/chat")
 @limiter.limit("1/minute")
-async def chat(body: ChatRequest, request: Request):
-
+async def chat(
+    body: ChatRequest,
+    request: Request,
+    user_id: uuid.UUID = Depends(get_current_user),
+):
     async def event_stream():
-        candidates = hybrid_search(DEV_USER, body.question)
+
+        candidates = hybrid_search(user_id, body.question)
         top = rerank(body.question, candidates)
         context, used = build_context(top)
 
@@ -88,8 +91,12 @@ async def chat(body: ChatRequest, request: Request):
     return EventSourceResponse(event_stream())
 
 @router.post("/chat_waiting", response_model=AnswerOut)
-async def chat_waiting(body: ChatRequest, request: Request):
-    candidates = hybrid_search(DEV_USER, body.question)
+async def chat_waiting(
+    body: ChatRequest,
+    request: Request,
+    user_id: uuid.UUID = Depends(get_current_user),
+):
+    candidates = hybrid_search(user_id, body.question)
     top = rerank(body.question, candidates)
     context, used = build_context(top)
     answer_text, verified = generate(body.question, context, len(used))
@@ -106,6 +113,9 @@ if __name__ == "__main__":
     import asyncio
 
     q = " ".join(sys.argv[1:]) or "how many LI are there in the game"
-    result = asyncio.run(chat_waiting(ChatRequest(question=q), request=None))
+    mock_user_id = uuid.UUID(int=0)  # 00000000-0000-0000-0000-000000000000
+    result = asyncio.run(
+        chat_waiting(ChatRequest(question=q), request=None, user_id=mock_user_id)
+    )
     print(result.model_dump_json(indent=2))
     

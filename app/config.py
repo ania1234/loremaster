@@ -5,7 +5,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str
-
+    supabase_jwt_secret: str
+    supabase_url: str
     # Models -- section 9 of the design doc: chat and utility are separate
     chat_model: str = "openai/gpt-4o-mini"
     utility_model: str = "openai/gpt-4o-mini"
