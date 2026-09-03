@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db.models import Document
-from app.db.session import get_db
+from app.db.session import get_db_for_user
 from app.ingestion.extract import is_scanned
 from app.limiter import limiter
 from app.schemas import DocumentCreated, DocumentOut
@@ -35,7 +35,7 @@ async def upload(
     file: UploadFile = File(...),
     title: str = Form(...),
     doc_type: str = Form(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_user),
     user_id: uuid.UUID = Depends(get_current_user),
 ):
     ext = Path(file.filename).suffix.lower()
@@ -66,7 +66,7 @@ async def upload(
 @limiter.limit("1/minute")
 async def list_documents(
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_user),
     user_id: uuid.UUID = Depends(get_current_user),
 ):
     return (db.query(Document)
@@ -78,7 +78,7 @@ async def list_documents(
 @router.get("/{doc_id}", response_model=DocumentOut)
 async def get_document(
     doc_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_user),
     user_id: uuid.UUID = Depends(get_current_user),
 ):
     doc = (db.query(Document)
@@ -92,7 +92,7 @@ async def get_document(
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     doc_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_user),
     user_id: uuid.UUID = Depends(get_current_user),
 ):
     doc = (db.query(Document)
