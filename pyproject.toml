@@ -28,6 +28,7 @@ dependencies = [
     "slowapi>=0.1.10",
     "sqlalchemy>=2.0.52",
     "sse-starlette>=3.4.8",
+    "supabase>=2.31.0",
     "tiktoken>=0.14.0",
     "uvicorn>=0.52.4",
 ]
