@@ -12,11 +12,13 @@ from fastapi import (
     UploadFile,
     status,
 )
+import pymupdf
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db.models import Document
 from app.db.session import get_db_for_user
+from app.db.store import store_document
 from app.ingestion.extract import is_scanned
 from app.limiter import limiter
 from app.schemas import DocumentCreated, DocumentOut
@@ -29,7 +31,7 @@ UPLOAD_DIR = Path("data/uploads")
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED,
              response_model=DocumentCreated)
-@limiter.limit("1/minute")
+@limiter.limit("2/minute")
 async def upload(
     request: Request,
     file: UploadFile = File(...),
@@ -53,17 +55,22 @@ async def upload(
     path.write_bytes(data)
 
     # SEAM: in Lesson 37 this becomes `await redis.enqueue_job("ingest", doc_id)`
-    from app.db.store import store_document
-    result = store_document(path, str(user_id), doc_type, title)
+    doc = pymupdf.open(path)
+    pages_no = doc.page_count
+    doc.close()
+    doc_id, pending = store_document(str(path), str(user_id), doc_type, title, pages_no, str(doc_id))
+    redis = request.app.state.redis
+    await redis.enqueue_job("ingest_document", str(doc_id), str(user_id), path)
 
-    if not result:
-        path.unlink()  # cleanup
-        raise HTTPException(500, "failed to store document")
+        #result = await job.result()
+        #if not result:
+        #path.unlink()  # cleanup
+        #raise HTTPException(500, "failed to store document")
     return DocumentCreated(id=doc_id, status="pending")
 
 
 @router.get("", response_model=list[DocumentOut])
-@limiter.limit("1/minute")
+@limiter.limit("10/minute")
 async def list_documents(
     request: Request,
     db: Session = Depends(get_db_for_user),

@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 
+from arq import create_pool
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,12 +13,15 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.limiter import limiter
 from app.routers import chat, documents
+from app.worker import REDIS
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("starting up")
+    app.state.redis = await create_pool(REDIS)
     yield
+    await app.state.redis.close()
     print("shutting down")
 
 

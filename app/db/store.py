@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.db.models import Chunk as ChunkRow
 from app.db.models import Document, SessionLocal
-from app.ingestion.chunk import chunk_document
+from app.ingestion.chunk import Chunk, chunk_document
 from app.ingestion.embed import embed_chunks
 from app.ingestion.extract import extract_pages, is_scanned
 from app.ingestion.normalise import normalise
@@ -22,7 +22,85 @@ def _file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def store_document(path: str, user_id: str, doc_type: str, title: str | None = None) -> bool:
+def store_document(path: str, user_id: str, doc_type: str, title: str, pages_no: int, doc_id: str) -> tuple[str, bool]:
+    file_hash = _file_hash(Path(path))
+    with SessionLocal() as session:
+        session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+        )
+        document = (
+            session.query(Document)
+            .filter_by(user_id=user_id, file_hash=file_hash)
+            .first()
+        )
+        if document is None:
+            document = Document(
+                user_id=user_id,
+                title=title,
+                doc_type=doc_type,
+                storage_path=str(path),
+                page_count=pages_no,
+                status="pending",
+                file_hash=file_hash,
+                id=doc_id
+            )
+            session.add(document)
+            session.commit()
+            return document.id, True  
+        else:
+            if document.status == "ready":
+                print("Document already stored")
+                return document.id, False
+            else:
+                return document.id, True
+                    
+def store_chunks(chunks: list[Chunk], embeddings: list[list[float]], user_id: str, file_hash: str) -> bool:
+     with SessionLocal() as session:
+            session.execute(
+            text("SELECT set_config('app.current_user_id', :uid, true)"),
+            {"uid": str(user_id)},
+            )
+            try:
+                document = (
+                    session.query(Document)
+                    .filter_by(user_id=user_id, file_hash=file_hash)
+                    .first()
+                )
+                if document is None:
+                    raise ValueError("Document not found in database")
+                else:
+                    if document.status == "ready":
+                        raise ValueError("Document already stored")
+                    
+                session.add_all(
+                    ChunkRow(
+                        document_id=document.id,
+                        user_id=document.user_id,
+                        ordinal=c.ordinal,
+                        content=c.content,
+                        heading_path=c.heading_path,
+                        page_from=c.page_from,
+                        page_to=c.page_to,
+                        token_count=c.token_count,
+                        embedding=emb,
+                    )
+                    for c, emb in zip(chunks, embeddings)
+                )
+                document.status = "ready"
+                session.commit()
+                return True
+    
+            except Exception as exc:
+                session.rollback()
+                if(document is not None):
+                    document.status = "failed"
+                    document.error_message = str(exc)[:2000]
+                session.commit()
+                print(f"store_chunks failed: {exc}")
+                return False
+
+def store_everything_legacy(path: str, user_id: str, doc_type: str, title: str | None = None) -> bool:
     file_path = Path(path)
     title = title or file_path.name
     uid = uuid.UUID(user_id)
@@ -105,4 +183,4 @@ if __name__ == "__main__":
     user_id = sys.argv[2] if len(sys.argv) > 2 else "00000000-0000-0000-0000-000000000000"
     doc_type = sys.argv[3] if len(sys.argv) > 3 else "ruleset"
     title = sys.argv[4] if len(sys.argv) > 4 else None
-    store_document(path, user_id, doc_type, title)
+    store_everything_legacy(path, user_id, doc_type, title)
