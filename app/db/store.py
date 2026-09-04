@@ -3,6 +3,8 @@ import uuid
 import sys
 from pathlib import Path
 
+from sqlalchemy import text
+
 from app.db.models import Chunk as ChunkRow
 from app.db.models import Document, SessionLocal
 from app.ingestion.chunk import chunk_document
@@ -44,6 +46,10 @@ def store_document(path: str, user_id: str, doc_type: str, title: str | None = N
         raise ValueError("Embeddings count different than chunks")
     
     with SessionLocal() as session:
+        session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(uid)},
+        )
         try:
             document = (
                 session.query(Document)

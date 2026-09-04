@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from app.ingestion.extract import extract_first_try, extract_pages
-from app.tests.extraction_facts import FACTS, WINDOW
+from tests.extraction_facts import FACTS, WINDOW
 
 
 def flatten(text: str) -> str:

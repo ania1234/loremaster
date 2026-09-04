@@ -34,6 +34,10 @@ KEYWORD_SQL = text("""
 def keyword_search(user_id: uuid.UUID, query: str, k: int | None = None):
     k = k or settings.retrieve_candidates
     with SessionLocal() as session:
+        session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+        )
         rows = session.execute(
             KEYWORD_SQL, {"q": query, "uid": str(user_id), "k": k}
         ).mappings().all()
@@ -45,6 +49,10 @@ def vector_search(user_id: uuid.UUID, query: str, k: int | None = None):
     k = k or settings.retrieve_candidates
     qvec = embed_texts([query])[0]
     with SessionLocal() as session:
+        session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+        )
         rows = session.execute(
             VECTOR_SQL, {"qvec": str(qvec), "uid": str(user_id), "k": k}
         ).mappings().all()
