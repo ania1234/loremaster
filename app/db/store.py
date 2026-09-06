@@ -18,12 +18,10 @@ from app.ingestion.normalise import normalise
     python app/db/store.py "data/sesja.md" "00000000-0000-0000-0000-000000000000" "transcript"
 """
 
-def _file_hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def store_document(path: str, user_id: str, doc_type: str, title: str, pages_no: int, doc_id: str) -> tuple[str, bool]:
-    file_hash = _file_hash(Path(path))
+
+def store_document(path: str, user_id: str, doc_type: str, title: str, pages_no: int, doc_id: str, file_hash: str) -> tuple[str, bool]:
     with SessionLocal() as session:
         session.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -47,7 +45,7 @@ def store_document(path: str, user_id: str, doc_type: str, title: str, pages_no:
             )
             session.add(document)
             session.commit()
-            return document.id, True  
+            return doc_id, True
         else:
             if document.status == "ready":
                 print("Document already stored")

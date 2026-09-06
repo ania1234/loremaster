@@ -4,6 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+class DownloadLinkOut(BaseModel):
+    id: uuid.UUID
+    link: str
 
 class DocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

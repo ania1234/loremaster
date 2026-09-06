@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -21,13 +22,16 @@ from app.db.session import get_db_for_user
 from app.db.store import store_document
 from app.ingestion.extract import is_scanned
 from app.limiter import limiter
-from app.schemas import DocumentCreated, DocumentOut
+from app.schemas import DocumentCreated, DocumentOut, DownloadLinkOut
+from app.storage import signed_url, upload_pdf, delete_object
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 # Replaced by the real authenticated user in Lesson 33
 UPLOAD_DIR = Path("data/uploads")
 
+def _file_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED,
              response_model=DocumentCreated)
@@ -49,25 +53,43 @@ async def upload(
     if ext == ".pdf" and is_scanned(data):
         raise HTTPException(422, "this PDF appears to be a scan with no text layer")
 
+    #send the document to cloud storage (Supabase) instead of local storage
+
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     doc_id = uuid.uuid4()
-    path = UPLOAD_DIR / f"{doc_id}.{ext}"
-    path.write_bytes(data)
+    temp_path = UPLOAD_DIR / f"{doc_id}.{ext}"
+    temp_path.write_bytes(data)
+    file_hash = _file_hash(temp_path)
 
+    cloud_path = upload_pdf(user_id, doc_id, data)
     # SEAM: in Lesson 37 this becomes `await redis.enqueue_job("ingest", doc_id)`
-    doc = pymupdf.open(path)
+    doc = pymupdf.open(temp_path)
     pages_no = doc.page_count
     doc.close()
-    doc_id, pending = store_document(str(path), str(user_id), doc_type, title, pages_no, str(doc_id))
+    doc_id, pending = store_document(cloud_path, str(user_id), doc_type, title, pages_no, str(doc_id), file_hash)
     redis = request.app.state.redis
-    await redis.enqueue_job("ingest_document", str(doc_id), str(user_id), path)
-
-        #result = await job.result()
-        #if not result:
-        #path.unlink()  # cleanup
-        #raise HTTPException(500, "failed to store document")
+    if pending:
+        job = await redis.enqueue_job("ingest_document", str(doc_id), str(user_id), temp_path)
+    else:
+        return DocumentCreated(id=doc_id, status="ready")
     return DocumentCreated(id=doc_id, status="pending")
 
+@router.get("/download/{doc_id}", response_model=DownloadLinkOut)
+@limiter.limit("10/minute")
+async def get_download_link(
+    request: Request,
+    doc_id: uuid.UUID,
+    db: Session = Depends(get_db_for_user),
+    user_id: uuid.UUID = Depends(get_current_user),
+):
+    # Implementation for generating download link
+    storage_path = f"{user_id}/{doc_id}.pdf"
+    link, err = signed_url(storage_path)
+    if err is not None:
+        status_code = int(getattr(err, "status", 502) or 502)
+        detail = getattr(err, "message", None) or "could not generate download link"
+        raise HTTPException(status_code, detail)
+    return DownloadLinkOut(id=doc_id, link=link)
 
 @router.get("", response_model=list[DocumentOut])
 @limiter.limit("10/minute")
@@ -107,6 +129,6 @@ async def delete_document(
              .first())
     if not doc:
         raise HTTPException(404, "document not found")
-    Path(doc.storage_path).unlink(missing_ok=True)
+    delete_object(doc.storage_path)
     db.delete(doc)          # chunks cascade
     db.commit()

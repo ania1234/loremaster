@@ -30,9 +30,10 @@ def _set_status(doc_id, status, uid: uuid.UUID, error=None, page_count=None):
         print(f"worker: set status for {doc_id} to {status} (error={error})")   
 
 
-async def ingest_document(ctx, document_id: str, uid: uuid.UUID, path: Path):
+async def ingest_document(ctx, document_id: str, uid: uuid.UUID, temp_path: Path):
     doc_id = uuid.UUID(document_id)
 
+    print(f"worker ingesting doc with temp path {temp_path}")
     with SessionLocal() as db:
         db.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -40,7 +41,6 @@ async def ingest_document(ctx, document_id: str, uid: uuid.UUID, path: Path):
         )
         print(f"worker: starting ingestion for {doc_id} (user {uid})")
         doc = db.get(Document, doc_id)
-        path = Path(doc.storage_path)
         user_id = doc.user_id
         session_date = doc.session_date
 
@@ -48,7 +48,7 @@ async def ingest_document(ctx, document_id: str, uid: uuid.UUID, path: Path):
         _set_status(doc_id, "processing", uid)
 
         # Design doc section 6, step 0 -- reject scans with a clear message
-        if is_scanned(path):
+        if  is_scanned(temp_path):
             _set_status(
                 doc_id, "failed",
                 uid=uid,
@@ -58,7 +58,7 @@ async def ingest_document(ctx, document_id: str, uid: uuid.UUID, path: Path):
             )
             return
 
-        pages = normalise(extract_pages(path, doc.doc_type))
+        pages = normalise(extract_pages(temp_path, doc.doc_type))
         chunks = chunk_document(pages, doc.doc_type)
         if not chunks:
             _set_status(doc_id, "failed", uid=uid, error="No readable text was found in this document.")
@@ -74,6 +74,9 @@ async def ingest_document(ctx, document_id: str, uid: uuid.UUID, path: Path):
     except Exception as exc:
         _set_status(doc_id, "failed", uid=uid, error=f"Ingestion failed: {exc}")
         raise            # re-raise so ARQ logs it and retry policy applies
+
+    #cleanup: remove the temporary file
+    temp_path.unlink(missing_ok=True)
 
 
 async def hello(ctx, name: str):
