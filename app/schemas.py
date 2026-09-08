@@ -37,6 +37,9 @@ class Citation(BaseModel):
     page_to: int | None
     heading_path: str | None
 
+class ChunkOut(BaseModel):
+    id: uuid.UUID
+    text: str
 
 class AnswerOut(BaseModel):
     answer: str

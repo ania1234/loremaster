@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { supabase } from "@/lib/supabase";
+import { AnswerWithCitations } from "@/components/answer_with_citations";
 
 type Citation = {
   n: number;
@@ -60,7 +61,7 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-8">
+    <main className="mx-auto max-w-5xl space-y-6 p-8">
       <form onSubmit={ask} className="flex gap-2">
         <input
           value={question}
@@ -76,27 +77,13 @@ export default function ChatPage() {
       )}
 
       {answer && (
-        <div className="space-y-4">
-          <p className="whitespace-pre-wrap leading-relaxed">{answer}</p>
-
-          {!verified && (
-            <p className="rounded bg-amber-50 p-2 text-sm text-amber-800">
-              Unverified: this answer referenced a source that could not be
-              matched. Check the citations carefully.
-            </p>
-          )}
-
-          <ul className="space-y-1 border-t pt-3 text-sm text-gray-600">
-            {citations.map((c) => (
-              <li key={c.n}>
-                [{c.n}] {c.document_title}
-                {c.page_from ? `, p.${c.page_from}` : ""}
-                {c.heading_path ? ` -- ${c.heading_path}` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <AnswerWithCitations
+          answer={answer}
+          citations={citations}
+          verified={verified}
+        />
       )}
+
     </main>
   );
 }

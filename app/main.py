@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.limiter import limiter
-from app.routers import chat, documents
+from app.routers import chat, chunks, documents
 from app.worker import REDIS
 
 
@@ -29,6 +29,7 @@ app = FastAPI(title="Loremaster API", lifespan=lifespan)
 
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(chunks.router)
 app.add_middleware(SlowAPIMiddleware)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

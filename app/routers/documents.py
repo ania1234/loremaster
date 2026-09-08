@@ -1,8 +1,8 @@
 import hashlib
 import uuid
-from datetime import datetime
 from pathlib import Path
 
+import pymupdf
 from fastapi import (
     APIRouter,
     Depends,
@@ -13,7 +13,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-import pymupdf
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -23,7 +22,7 @@ from app.db.store import store_document
 from app.ingestion.extract import is_scanned
 from app.limiter import limiter
 from app.schemas import DocumentCreated, DocumentOut, DownloadLinkOut
-from app.storage import signed_url, upload_pdf, delete_object
+from app.storage import delete_object, signed_url, upload_pdf
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
