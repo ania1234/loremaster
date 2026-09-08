@@ -67,7 +67,7 @@ export default function DocumentsPage() {
     await load();
   }
 
-  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
+  async function handleUpload(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const formEl = e.currentTarget;
     setBusy(true);

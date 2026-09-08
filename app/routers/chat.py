@@ -4,9 +4,10 @@ import sys
 import uuid
 
 from fastapi import APIRouter, Depends, Request
-from litellm import completion
+from litellm import acompletion
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.auth import get_current_user
 from app.config import settings
@@ -49,13 +50,17 @@ async def chat(
     request: Request,
     user_id: uuid.UUID = Depends(get_current_user),
 ):
-    async def event_stream():
-
+    def retrieve():
+        """Blocking retrieval pipeline -- kept off the event loop."""
         candidates = hybrid_search(user_id, body.question)
         top = rerank(body.question, candidates)
-        context, used = build_context(top)
+        return build_context(top)
 
-        stream = completion(
+    async def event_stream():
+
+        context, used = await run_in_threadpool(retrieve)
+
+        stream = await acompletion(
             model=settings.chat_model,
             temperature=settings.temperature,
             stream=True,
@@ -67,9 +72,9 @@ async def chat(
         )
 
         parts: list[str] = []
-        for chunk in stream:
+        async for chunk in stream:
             if await request.is_disconnected():
-                stream.close()               # user left; stop the upstream LLM call
+                await stream.aclose()        # user left; stop the upstream LLM call
                 return
             delta = chunk.choices[0].delta.content
             if delta:

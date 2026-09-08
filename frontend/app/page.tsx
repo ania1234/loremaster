@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     const { error } = await supabase.auth.signInWithPassword({
@@ -18,7 +18,7 @@ export default function LoginPage() {
       password,
     });
     if (error) setError(error.message);
-    else router.push("/documents");
+    else router.push("/home");
   }
 
   return (
