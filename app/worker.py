@@ -1,6 +1,6 @@
 import asyncio
+import os
 import uuid
-from pathlib import Path
 
 from arq.connections import RedisSettings
 from sqlalchemy import text
@@ -11,8 +11,11 @@ from app.ingestion.chunk import chunk_document
 from app.ingestion.embed import embed_chunks
 from app.ingestion.extract import extract_pages, is_scanned
 from app.ingestion.normalise import normalise
+from app.storage import download_to_temp
 
-REDIS = RedisSettings(host="localhost", port=6379)
+REDIS = RedisSettings.from_dsn(
+    os.environ.get("REDIS_URL", "redis://localhost:6379")
+)
 
 
 def _set_status(doc_id, status, uid: uuid.UUID, error=None, page_count=None):
@@ -30,10 +33,9 @@ def _set_status(doc_id, status, uid: uuid.UUID, error=None, page_count=None):
         print(f"worker: set status for {doc_id} to {status} (error={error})")   
 
 
-async def ingest_document(ctx, document_id: str, uid: uuid.UUID, temp_path: Path):
+async def ingest_document(ctx, document_id: str, uid: uuid.UUID):
     doc_id = uuid.UUID(document_id)
 
-    print(f"worker ingesting doc with temp path {temp_path}")
     with SessionLocal() as db:
         db.execute(
         text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -43,6 +45,12 @@ async def ingest_document(ctx, document_id: str, uid: uuid.UUID, temp_path: Path
         doc = db.get(Document, doc_id)
         user_id = doc.user_id
         session_date = doc.session_date
+        storage_path = doc.storage_path
+
+    # The API and the worker are separate containers, so the only copy of the
+    # file they share is the one in Supabase Storage.
+    temp_path = download_to_temp(storage_path)
+    print(f"worker: downloaded {storage_path} to {temp_path}")
 
     try:
         _set_status(doc_id, "processing", uid)
@@ -75,8 +83,9 @@ async def ingest_document(ctx, document_id: str, uid: uuid.UUID, temp_path: Path
         _set_status(doc_id, "failed", uid=uid, error=f"Ingestion failed: {exc}")
         raise            # re-raise so ARQ logs it and retry policy applies
 
-    #cleanup: remove the temporary file
-    temp_path.unlink(missing_ok=True)
+    finally:
+        #cleanup: remove the downloaded file (also on the early returns above)
+        temp_path.unlink(missing_ok=True)
 
 
 async def hello(ctx, name: str):

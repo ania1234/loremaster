@@ -26,11 +26,9 @@ from app.storage import delete_object, signed_url, upload_pdf
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
-# Replaced by the real authenticated user in Lesson 33
+# Scratch space for the page count only -- the file the worker reads comes
+# from Supabase Storage, since it runs in a different container.
 UPLOAD_DIR = Path("data/uploads")
-
-def _file_hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED,
              response_model=DocumentCreated)
@@ -54,21 +52,25 @@ async def upload(
 
     #send the document to cloud storage (Supabase) instead of local storage
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     doc_id = uuid.uuid4()
-    temp_path = UPLOAD_DIR / f"{doc_id}.{ext}"
-    temp_path.write_bytes(data)
-    file_hash = _file_hash(temp_path)
+    file_hash = hashlib.sha256(data).hexdigest()
 
     cloud_path = upload_pdf(user_id, doc_id, data)
-    # SEAM: in Lesson 37 this becomes `await redis.enqueue_job("ingest", doc_id)`
-    doc = pymupdf.open(temp_path)
-    pages_no = doc.page_count
-    doc.close()
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = UPLOAD_DIR / f"{doc_id}{ext}"
+    temp_path.write_bytes(data)
+    try:
+        doc = pymupdf.open(temp_path)
+        pages_no = doc.page_count
+        doc.close()
+    finally:
+        temp_path.unlink(missing_ok=True)
+
     doc_id, pending = store_document(cloud_path, str(user_id), doc_type, title, pages_no, str(doc_id), file_hash)
     redis = request.app.state.redis
     if pending:
-        job = await redis.enqueue_job("ingest_document", str(doc_id), str(user_id), temp_path)
+        job = await redis.enqueue_job("ingest_document", str(doc_id), str(user_id))
     else:
         return DocumentCreated(id=doc_id, status="ready")
     return DocumentCreated(id=doc_id, status="pending")
