@@ -68,7 +68,11 @@ def extract_pages(path: Path, doc_type: str) -> list[Page]:
     doc = pymupdf.open(path)
     count = doc.page_count
     doc.close()
-    return [extract_page(path, i, doc_type) for i in range(count)]
+    pages = []
+    for i in range(count):
+        pages.append(extract_page(path, i, doc_type))
+        print(f"  extracted {i + 1}/{count} pages")
+    return pages
 
 def extract_first_try(path: Path) -> list[Page]:
     """Markdown per page, headings preserved, page numbers retained."""
