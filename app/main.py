@@ -55,7 +55,13 @@ class AskRequest(BaseModel):
 
 
 @app.get("/health")
-async def health(db: Session = Depends(get_db)):
+async def health():
+    """Liveness only -- the platform healthcheck must not fail on a DB blip."""
+    return {"status": "ok"}
+
+
+@app.get("/health/deep")
+async def health_deep(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"status": "ok", "database": "connected"}
 

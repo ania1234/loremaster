@@ -9,7 +9,15 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from app.config import settings
 
-engine = create_engine(settings.database_url, echo=False)
+# prepare_threshold=None: psycopg3 starts issuing PREPARE after a statement
+# repeats, which Supabase's transaction pooler (port 6543) rejects. pre_ping
+# covers the pooler dropping connections that have gone idle.
+engine = create_engine(
+    settings.database_url,
+    echo=False,
+    pool_pre_ping=True,
+    connect_args={"prepare_threshold": None},
+)
 SessionLocal = sessionmaker(bind=engine)
 
 

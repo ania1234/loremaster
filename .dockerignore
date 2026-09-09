@@ -1,0 +1,17 @@
+.venv/
+node_modules/
+frontend/
+frontend_first_experiment/
+__pycache__/
+*.pyc
+.git/
+.env
+.env.local
+.pytest_cache/
+.ruff_cache/
+data/
+debug/
+uploads/
+experiments/
+eval/
+tests/
