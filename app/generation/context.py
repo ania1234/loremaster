@@ -26,6 +26,7 @@ def build_context(chunks: list[dict], budget: int = BUDGET):
 if __name__ == "__main__":
     import uuid
     from app.retrieval.search import vector_search
+    from app.retrieval.understand import StructuredQuery
     user_id = "00000000-0000-0000-0000-000000000000"
-    search_result = vector_search(uuid.UUID(user_id), "how many LI there are in the game", 3)
+    search_result = vector_search(uuid.UUID(user_id), StructuredQuery(search_text="how many LI there are in the game"), 3)
     print(build_context(search_result))

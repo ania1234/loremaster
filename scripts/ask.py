@@ -4,6 +4,7 @@ import uuid
 from app.generation.answer import generate
 from app.generation.context import build_context
 from app.retrieval.search import vector_search
+from app.retrieval.understand import StructuredQuery
 
 DEV_USER = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
@@ -14,7 +15,7 @@ def main() -> None:
         print('usage: python scripts/ask.py "your question"')
         raise SystemExit(1)
 
-    candidates = vector_search(DEV_USER, question, k=8)
+    candidates = vector_search(DEV_USER, StructuredQuery(search_text=question), k=8)
     context, used = build_context(candidates)
     answer, verified = generate(question, context, len(used))
 

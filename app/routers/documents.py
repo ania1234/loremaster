@@ -1,5 +1,7 @@
 import hashlib
+import re
 import uuid
+from datetime import date
 from pathlib import Path
 
 import pymupdf
@@ -29,6 +31,26 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 # Scratch space for the page count only -- the file the worker reads comes
 # from Supabase Storage, since it runs in a different container.
 UPLOAD_DIR = Path("data/uploads")
+
+SESSION_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+
+
+def parse_session_date(filename: str | None) -> date | None:
+    """Pull the session date out of a filename like "session-2025-03-14.md".
+
+    Returns None when the name holds no date, or holds one that is not real
+    (e.g. 2025-02-30).
+    """
+    if not filename:
+        return None
+    match = SESSION_DATE_RE.search(Path(filename).stem)
+    if match is None:
+        return None
+    try:
+        return date(int(match[1]), int(match[2]), int(match[3]))
+    except ValueError:
+        return None
+
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED,
              response_model=DocumentCreated)
@@ -67,7 +89,9 @@ async def upload(
     finally:
         temp_path.unlink(missing_ok=True)
 
-    doc_id, pending = store_document(cloud_path, str(user_id), doc_type, title, pages_no, str(doc_id), file_hash)
+    session_date = parse_session_date(file.filename)
+
+    doc_id, pending = store_document(cloud_path, str(user_id), doc_type, title, pages_no, str(doc_id), file_hash, session_date)
     redis = request.app.state.redis
     if pending:
         job = await redis.enqueue_job("ingest_document", str(doc_id), str(user_id))

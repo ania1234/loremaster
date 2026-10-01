@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     # Retrieval -- section 7
     retrieve_candidates: int = 30
+    # Narrow questions don't need the full pool; broad ones (lists,
+    # overviews) keep retrieve_candidates. See understand.StructuredQuery.
+    retrieve_candidates_narrow: int = 16
     retrieve_final: int = 8
 
     temperature: float = 0.1

@@ -21,6 +21,7 @@ export default function ChatPage() {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [verified, setVerified] = useState(true);
   const [phase, setPhase] = useState<"idle" | "searching" | "streaming">("idle");
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   async function ask(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,7 +37,7 @@ export default function ChatPage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${data.session?.access_token}`,
       },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, conversation_id: conversationId }),
     });
 
     const events = res.body!
@@ -48,7 +49,9 @@ export default function ChatPage() {
       const { done, value } = await events.read();
       if (done) break;
 
-      if (value.event === "token") {
+      if (value.event === "conversation") {
+        setConversationId(value.data);
+      } else if (value.event === "token") {
         setPhase("streaming");
         setAnswer((prev) => prev + value.data);
       } else if (value.event === "citations") {
@@ -67,6 +70,7 @@ export default function ChatPage() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="Ask about your materials..."
+          maxLength={2000}
           className="flex-1 rounded border px-3 py-2"
         />
         <button className="rounded bg-black px-4 py-2 text-white">Ask</button>

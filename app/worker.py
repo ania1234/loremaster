@@ -4,9 +4,9 @@ import time
 import uuid
 
 from arq.connections import RedisSettings
-from sqlalchemy import text
 
-from app.db.models import Document, SessionLocal
+from app.db.models import Document
+from app.db.session import session_for_user
 from app.db.store import store_chunks
 from app.ingestion.chunk import chunk_document
 from app.ingestion.embed import embed_chunks
@@ -20,18 +20,13 @@ REDIS = RedisSettings.from_dsn(
 
 
 def _set_status(doc_id, status, uid: uuid.UUID, error=None, page_count=None):
-    with SessionLocal() as db:
-        db.execute(
-        text("SELECT set_config('app.current_user_id', :uid, true)"),
-        {"uid": str(uid)},
-        )
+    with session_for_user(uid) as db:
         doc = db.get(Document, doc_id)
         doc.status = status
         doc.error_message = error
         if page_count is not None:
             doc.page_count = page_count
-        db.commit()
-        print(f"worker: set status for {doc_id} to {status} (error={error})")   
+    print(f"worker: set status for {doc_id} to {status} (error={error})")
 
 
 def _ingest_sync(document_id: str, uid: uuid.UUID):
@@ -43,16 +38,16 @@ def _ingest_sync(document_id: str, uid: uuid.UUID):
     doc_id = uuid.UUID(document_id)
     started = time.perf_counter()
 
-    with SessionLocal() as db:
-        db.execute(
-        text("SELECT set_config('app.current_user_id', :uid, true)"),
-        {"uid": str(uid)},
-        )
-        print(f"worker: starting ingestion for {doc_id} (user {uid})")
+    print(f"worker: starting ingestion for {doc_id} (user {uid})")
+    # session_for_user commits on exit, which expires `doc` -- copy out
+    # everything the pipeline needs while the session is still open.
+    with session_for_user(uid) as db:
         doc = db.get(Document, doc_id)
         user_id = doc.user_id
         session_date = doc.session_date
         storage_path = doc.storage_path
+        doc_type = doc.doc_type
+        file_hash = doc.file_hash
 
     # The API and the worker are separate containers, so the only copy of the
     # file they share is the one in Supabase Storage.
@@ -76,11 +71,11 @@ def _ingest_sync(document_id: str, uid: uuid.UUID):
         # Extraction is minutes of CPU on a rulebook, so each stage reports how
         # long it took -- otherwise "processing" is an unexplained black box.
         t0 = time.perf_counter()
-        pages = normalise(extract_pages(temp_path, doc.doc_type))
+        pages = normalise(extract_pages(temp_path, doc_type))
         print(f"worker: {doc_id} extracted {len(pages)} pages "
               f"in {time.perf_counter() - t0:.1f}s")
 
-        chunks = chunk_document(pages, doc.doc_type)
+        chunks = chunk_document(pages, doc_type)
         print(f"worker: {doc_id} chunked into {len(chunks)} chunks")
         if not chunks:
             _set_status(doc_id, "failed", uid=uid, error="No readable text was found in this document.")
@@ -92,7 +87,7 @@ def _ingest_sync(document_id: str, uid: uuid.UUID):
         print(f"worker: {doc_id} embedded {len(vectors)} chunks "
               f"in {time.perf_counter() - t0:.1f}s")
 
-        store_chunks(chunks, vectors, str(user_id), doc.file_hash)   # one transaction
+        store_chunks(chunks, vectors, str(user_id), file_hash)   # one transaction
         _set_status(doc_id, "ready", uid=uid, page_count=len(pages))
         print(f"ingested {doc_id}: {len(chunks)} chunks from {len(pages)} pages "
               f"in {time.perf_counter() - started:.1f}s total")

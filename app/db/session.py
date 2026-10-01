@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from app.auth import get_current_user
 from app.db.models import SessionLocal
+from contextlib import contextmanager
 
 
 def get_db():
@@ -17,6 +18,22 @@ def get_db():
 
 def get_db_for_user(user_id: uuid.UUID = Depends(get_current_user)):
     """One transaction per request, with the RLS identity set on it."""
+    db = SessionLocal()
+    try:
+        db.execute(
+            text("SELECT set_config('app.current_user_id', :uid, true)"),
+            {"uid": str(user_id)},
+        )
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+@contextmanager
+def session_for_user(user_id: uuid.UUID):
     db = SessionLocal()
     try:
         db.execute(

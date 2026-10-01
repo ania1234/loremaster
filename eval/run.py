@@ -7,7 +7,7 @@ from app.config import settings
 from app.generation.answer import REFUSAL, generate
 from app.generation.context import build_context
 from app.retrieval.rerank import rerank
-from app.retrieval.search import hybrid_search
+from app.retrieval.search import hybrid_search_pre_understood
 
 DEV_USER = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
@@ -37,7 +37,7 @@ def main() -> None:
     recalls, grounded, refusal_ok = [], [], []
 
     for q in questions:
-        candidates = hybrid_search(DEV_USER, q["question"])
+        candidates = hybrid_search_pre_understood(DEV_USER, q["question"])
         top = rerank(q["question"], candidates)
         retrieved = {str(c["id"]) for c in top}
 
