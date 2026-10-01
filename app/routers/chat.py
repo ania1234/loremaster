@@ -17,8 +17,9 @@ from app.generation.context import build_context
 from app.limiter import limiter
 from app.retrieval.rerank import rerank
 from app.retrieval.search import hybrid_search_pre_understood
-from app.routers.conversations import (ConversationCreate, MessageCreate,
-                                       create_conversation, create_message)
+from app.routers.conversations import (CitationCreate, ConversationCreate,
+                                       MessageCreate, create_conversation,
+                                       create_message)
 from app.schemas import AnswerOut, Citation
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -98,17 +99,27 @@ async def chat(
                 yield {"event": "token", "data": delta}
 
         answer_text = "".join(parts)
-        citations = to_citations(used)
-        citations = prune_citations(citations, answer_text)
-        citations = [c.model_dump(mode="json") for c in citations]
+        citations = prune_citations(to_citations(used), answer_text)
+
+        # Persist before the last event: a client may disconnect as soon as it
+        # has the citations, and then this generator would never resume.
+        with session_for_user(user_id) as db:
+            await create_message(
+                conversation_id,
+                MessageCreate(
+                    content=answer_text, role="bot", model_used=settings.chat_model,
+                    citations=[CitationCreate(**c.model_dump()) for c in citations],
+                ),
+                user_id=user_id, db=db,
+            )
+
         yield {
             "event": "citations",
             "data": json.dumps({
-                "citations": citations,
+                "citations": [c.model_dump(mode="json") for c in citations],
                 "verified": not verify_citations(answer_text, len(used)),
             }),
         }
-        #when the whole answer is back, add assistant message to db, with conversation_id, answer_text, citations, and timestamp, the character = "bot"
 
     # Own session (not Depends) so these rows commit before streaming starts;
     # a yield dependency would only commit after the whole stream finishes.
@@ -121,7 +132,7 @@ async def chat(
             conversation_id = conv.id
         await create_message(
             conversation_id,
-            MessageCreate(content=body.question, role="user", model_used=None),
+            MessageCreate(content=body.question, role="user", model_used=settings.chat_model),
             user_id=user_id, db=db,
         )
 

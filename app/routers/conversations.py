@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from litellm import completion
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -18,7 +18,8 @@ from app.db.session import get_db_for_user
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
  
 HISTORY_TURNS_FOR_REWRITE = 4
- 
+MAX_USER_MESSAGE_CHARS = 2000
+
  
 # --------------------------------------------------------------------------
 # Schemas
@@ -37,11 +38,19 @@ class ConversationOut(BaseModel):
  
  
 class MessageCreate(BaseModel):
-    content: str = Field(min_length=1, max_length=2000)
+    content: str = Field(min_length=1)
     role: Literal["user", "bot"]
     model_used: str | None
     citations: list[CitationCreate] = []
- 
+
+    @model_validator(mode="after")
+    def _limit_user_content(self):
+        """Only user input is capped; bot answers can run long."""
+        if self.role == "user" and len(self.content) > MAX_USER_MESSAGE_CHARS:
+            raise ValueError(
+                f"user messages are limited to {MAX_USER_MESSAGE_CHARS} characters")
+        return self
+
  
 class CitationCreate(BaseModel):
     n: int
