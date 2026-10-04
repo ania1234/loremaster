@@ -1,6 +1,5 @@
 import json
 import re
-import sys
 import uuid
 
 from fastapi import APIRouter, Depends, Request
@@ -12,15 +11,19 @@ from starlette.concurrency import run_in_threadpool
 from app.auth import get_current_user
 from app.config import settings
 from app.db.session import session_for_user
-from app.generation.answer import SYSTEM, generate, verify_citations
+from app.generation.answer import SYSTEM, verify_citations
 from app.generation.context import build_context
 from app.limiter import limiter
 from app.retrieval.rerank import rerank
 from app.retrieval.search import hybrid_search_pre_understood
-from app.routers.conversations import (CitationCreate, ConversationCreate,
-                                       MessageCreate, create_conversation,
-                                       create_message)
-from app.schemas import AnswerOut, Citation
+from app.routers.conversations import (
+    CitationCreate,
+    ConversationCreate,
+    MessageCreate,
+    create_conversation,
+    create_message,
+)
+from app.schemas import Citation
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -67,7 +70,7 @@ async def chat(
 ):
     def retrieve():
         """Blocking retrieval pipeline -- kept off the event loop."""
-        candidates = hybrid_search_pre_understood(user_id, body.question)
+        candidates = hybrid_search_pre_understood(user_id, body.question, conversation_id)
         top = rerank(body.question, candidates)
         return build_context(top)
 
@@ -107,7 +110,7 @@ async def chat(
             await create_message(
                 conversation_id,
                 MessageCreate(
-                    content=answer_text, role="bot", model_used=settings.chat_model,
+                    content=answer_text, role="assistant", model_used=settings.chat_model,
                     citations=[CitationCreate(**c.model_dump()) for c in citations],
                 ),
                 user_id=user_id, db=db,

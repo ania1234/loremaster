@@ -33,6 +33,22 @@ KEYWORD_SQL = """
     LIMIT :k
 """
 
+# OFFSET 1 drops the newest user message: chat.py stores the current question
+# before retrieval runs, so it would otherwise count as its own history.
+PREVIOUS_QUESTIONS_SQL = """
+    SELECT content FROM (
+        SELECT m.content, m.created_at
+        FROM messages m
+        JOIN conversations conv ON conv.id = m.conversation_id
+        WHERE m.conversation_id = :cid
+          AND conv.user_id = :uid
+          AND m.role = 'user'
+        ORDER BY m.created_at DESC
+        LIMIT :n OFFSET 1
+    ) prev
+    ORDER BY created_at
+"""
+
 
 def _filter_clauses(filters: Filters) -> tuple[str, dict]:
     """Turn the understood filters into WHERE fragments + their bind params.
@@ -107,16 +123,21 @@ def vector_search(user_id: uuid.UUID, structured_query: StructuredQuery,
         rows = session.execute(stmt, params).mappings().all()
     return [dict(r) for r in rows]
 
-def hybrid_search_pre_understood(user_id: uuid.UUID, query: str, limit: int | None = None):
-    #fetch all documents belonging to the user
-    with session_for_user(user_id) as session:
-        rows = session.execute(
-            text("SELECT id, title, doc_type, session_date FROM documents WHERE user_id = :uid"),
-            {"uid": str(user_id)}
-        ).mappings().all()
-    documents = [dict(r) for r in rows]
+def hybrid_search_pre_understood(user_id: uuid.UUID, query: str, conversation_id: uuid.UUID | None = None, limit: int | None = None):
+    #fetch previous questions from the conversation.
+    # Watch out - the current query is there as well and should be omitted.
+    # Sort the questions chronologically, the oldest first.
+    rows = []
+    if conversation_id is not None:
+        with session_for_user(user_id) as session:
+            rows = session.execute(
+                text(PREVIOUS_QUESTIONS_SQL),
+                {"cid": str(conversation_id), "uid": str(user_id),
+                 "n": settings.previous_questions_limit},
+            ).mappings().all()
+    previous_questions = [r['content'] for r in rows]
     #understand the query
-    structured_query = understand(query, documents)
+    structured_query = understand(query, previous_questions)
     return hybrid_search(user_id, structured_query, limit=limit)
 
 def hybrid_search(user_id: uuid.UUID, structured_query: StructuredQuery,

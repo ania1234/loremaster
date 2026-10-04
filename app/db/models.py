@@ -41,7 +41,7 @@ class Message(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("conversations.id", ondelete="CASCADE"))
-    role: Mapped[str] = mapped_column(String(20))  # bot | user
+    role: Mapped[str] = mapped_column(String(20))  # assistant | user
     content: Mapped[str] = mapped_column(Text)
     model_used: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(

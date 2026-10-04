@@ -25,11 +25,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* The window itself never scrolls: each page scrolls inside its own
+          column, so the bars around it stay put. */}
+      <body className="flex h-full flex-col">
         <UserBar />
         <div className="flex min-h-0 flex-1">
           <SideNav />
-          <div className="min-w-0 flex-1">{children}</div>
+          <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
         </div>
       </body>
     </html>

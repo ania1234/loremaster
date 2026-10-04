@@ -39,13 +39,13 @@ class ConversationOut(BaseModel):
  
 class MessageCreate(BaseModel):
     content: str = Field(min_length=1)
-    role: Literal["user", "bot"]
+    role: Literal["user", "assistant"]
     model_used: str | None
     citations: list[CitationCreate] = []
 
     @model_validator(mode="after")
     def _limit_user_content(self):
-        """Only user input is capped; bot answers can run long."""
+        """Only user input is capped; assistant answers can run long."""
         if self.role == "user" and len(self.content) > MAX_USER_MESSAGE_CHARS:
             raise ValueError(
                 f"user messages are limited to {MAX_USER_MESSAGE_CHARS} characters")
@@ -116,7 +116,43 @@ async def create_conversation(
     db.add(conv)
     db.flush()          # populate the server-side default id before commit
     return conv
- 
+
+
+@router.get("", response_model=list[ConversationOut])
+async def list_conversations(
+    limit: int = Query(default=20, le=100),
+    user_id: uuid.UUID = Depends(get_current_user),
+    db: Session = Depends(get_db_for_user),
+):
+    """Newest first."""
+    return (
+        db.query(Conversation)
+        .filter(Conversation.user_id == user_id)
+        .order_by(Conversation.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+@router.get("/{conv_id}", response_model=ConversationOut)
+async def get_conversation(
+    conv_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(get_current_user),
+    db: Session = Depends(get_db_for_user),
+):
+    return _owned_conversation(db, conv_id)
+
+
+@router.delete("/{conv_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conv_id: uuid.UUID,
+    user_id: uuid.UUID = Depends(get_current_user),
+    db: Session = Depends(get_db_for_user),
+):
+    conv = _owned_conversation(db, conv_id)
+    db.delete(conv)     # messages and their citations cascade (DB-level FKs)
+
+
 @router.post("/{conv_id}/message", response_model=MessageOut,
              status_code=status.HTTP_201_CREATED)
 async def create_message(

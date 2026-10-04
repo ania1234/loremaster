@@ -1,8 +1,10 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { FileText, MessageSquare } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FileText, MessageSquare, Trash2 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -10,10 +12,23 @@ const LINKS = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
 ] as const;
 
+const RECENT_CONVERSATIONS = 5;
+
+type Conversation = { id: string; title: string | null };
+
 // An allowlist rather than a denylist: the sign-in and password-recovery
 // screens must never grow navigation into the app, and neither should any
 // future standalone screen unless it opts in here.
 const SHOWN_ON: ReadonlySet<string> = new Set(LINKS.map((l) => l.href));
+
+function linkClass(active: boolean) {
+  return cn(
+    "flex items-center gap-2 rounded px-3 py-2 text-sm",
+    active
+      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+      : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+  );
+}
 
 export function SideNav() {
   const pathname = usePathname();
@@ -21,21 +36,69 @@ export function SideNav() {
   if (!SHOWN_ON.has(pathname)) return null;
 
   return (
-    <nav className="w-52 shrink-0 border-r bg-sidebar p-3">
+    <nav className="w-52 shrink-0 overflow-y-auto border-r bg-sidebar p-3">
+      {/* useSearchParams needs a Suspense boundary, or `next build` fails. */}
+      <Suspense>
+        <NavLinks pathname={pathname} />
+      </Suspense>
+    </nav>
+  );
+}
+
+function NavLinks({ pathname }: { pathname: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // The conversation open in the chat; null on a new one or another page.
+  const openId = pathname === "/chat" ? searchParams.get("c") : null;
+  const [recent, setRecent] = useState<Conversation[]>([]);
+  // Bumped after a delete, so the next-oldest conversation moves into the list.
+  const [reloads, setReloads] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Refetched whenever the open conversation changes, which includes the
+  // chat writing a brand-new conversation's id into the URL.
+  useEffect(() => {
+    let stale = false;
+    apiFetch(`/api/conversations?limit=${RECENT_CONVERSATIONS}`)
+      .then((res) => res.json())
+      .then((conversations) => {
+        if (!stale) setRecent(conversations);
+      })
+      .catch(() => {}); // the list is a shortcut; navigation works without it
+    return () => {
+      stale = true;
+    };
+  }, [openId, reloads]);
+
+  async function handleDelete(c: Conversation) {
+    if (!window.confirm(`Delete "${c.title ?? "Untitled"}"? This can't be undone.`)) {
+      return;
+    }
+    setDeletingId(c.id);
+    try {
+      await apiFetch(`/api/conversations/${c.id}`, { method: "DELETE" });
+      // A fresh chat replaces the deleted one; this also refetches the list.
+      if (c.id === openId) router.replace("/chat");
+    } catch {
+      window.alert("Couldn't delete the conversation. Please try again.");
+    } finally {
+      setDeletingId(null);
+      setReloads((n) => n + 1);
+    }
+  }
+
+  return (
+    <>
       <ul className="space-y-1">
         {LINKS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          // "Chat" means a new conversation; an open one is marked below.
+          const active = pathname === href && !openId;
           return (
             <li key={href}>
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2 rounded px-3 py-2 text-sm",
-                  active
-                    ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60",
-                )}
+                className={linkClass(active)}
               >
                 <Icon className="size-4" aria-hidden />
                 {label}
@@ -44,6 +107,47 @@ export function SideNav() {
           );
         })}
       </ul>
-    </nav>
+
+      {recent.length > 0 && (
+        <section className="mt-6">
+          <h2 className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+            Recent conversations
+          </h2>
+          <ul className="space-y-1">
+            {recent.map((c) => {
+              const active = c.id === openId;
+              const title = c.title ?? "Untitled";
+              return (
+                <li key={c.id} className="group relative">
+                  <Link
+                    href={`/chat?c=${c.id}`}
+                    aria-current={active ? "page" : undefined}
+                    title={title}
+                    className={cn(linkClass(active), "pr-8")}
+                  >
+                    <span className="truncate">{title}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(c)}
+                    disabled={deletingId === c.id}
+                    aria-label={`Delete conversation "${title}"`}
+                    title="Delete conversation"
+                    className={cn(
+                      "absolute top-1/2 right-1 -translate-y-1/2 rounded p-1 text-muted-foreground",
+                      "hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100",
+                      "group-hover:opacity-100 disabled:opacity-50",
+                      active ? "opacity-100" : "opacity-0",
+                    )}
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     utility_model: str = "openai/gpt-4o-mini"
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_dim: int = 1536
+    typesafe_api_base: str = "https://api.typesafe.ai"
+    jev_model: str = "jev-latest"
 
     # Chunking -- section 6, step 3
     chunk_max_tokens: int = 700
@@ -24,6 +26,8 @@ class Settings(BaseSettings):
     # overviews) keep retrieve_candidates. See understand.StructuredQuery.
     retrieve_candidates_narrow: int = 16
     retrieve_final: int = 8
+    # How many earlier questions in the conversation understand() gets as context.
+    previous_questions_limit: int = 5
 
     temperature: float = 0.1
 
