@@ -24,6 +24,16 @@ SessionLocal = sessionmaker(bind=engine)
 class Base(DeclarativeBase):
     pass
 
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    # The Supabase auth user id; there is no users table of our own.
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    # Null until the user has copied the examples or skipped them.
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now())
+
 class Conversation(Base):
     __tablename__ = "conversations"
 

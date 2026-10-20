@@ -62,9 +62,6 @@ def _filter_clauses(filters: Filters) -> tuple[str, dict]:
     if filters.doc_type:
         clauses.append("AND d.doc_type = :doc_type")
         params["doc_type"] = filters.doc_type
-    if filters.document_ids:
-        clauses.append("AND c.document_id = ANY((:document_ids)::uuid[])")
-        params["document_ids"] = [str(d) for d in filters.document_ids]
     if filters.session_date_from:
         clauses.append("AND d.session_date >= :session_date_from")
         params["session_date_from"] = filters.session_date_from
@@ -145,6 +142,12 @@ def hybrid_search(user_id: uuid.UUID, structured_query: StructuredQuery,
     limit = _candidate_k(structured_query, limit)
     vec = vector_search(user_id, structured_query, k=limit)
     kw = keyword_search(user_id, structured_query, k=limit)
+    if not vec and not kw and structured_query.filters.doc_type:
+        # doc_type is the classifier's guess. When it rules out every chunk the
+        # user has, searching everything beats answering from an empty context.
+        relaxed_filters = structured_query.filters.model_copy(update={"doc_type": None})
+        relaxed = structured_query.model_copy(update={"filters": relaxed_filters})
+        return hybrid_search(user_id, relaxed, limit=limit)
     return reciprocal_rank_fusion([vec, kw], limit=limit)
 
 if __name__ == "__main__":

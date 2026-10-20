@@ -29,6 +29,17 @@ class DocumentCreated(BaseModel):
     status: str
 
 
+class SampleOut(BaseModel):
+    title: str
+    doc_type: Literal["ruleset", "transcript"]
+    # note: no id, storage_path or owner -- the samples account stays hidden
+
+
+class OnboardingOut(BaseModel):
+    onboarded: bool
+    samples: list[SampleOut]
+
+
 class Citation(BaseModel):
     n: int
     chunk_id: uuid.UUID

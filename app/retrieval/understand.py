@@ -93,7 +93,7 @@ def decide_type(question: str) -> Literal["ruleset", "transcript", "unknown"]:
                         "type": "choice",
                         "instructions": PROMPT_JEV_DECIDE_TYPE.format(question=question),
                         "criteria": {
-                            "ruleset": "Rules of the game, how mechanics work, what players can do",
+                            "ruleset": "The game itself: its premise, setting, rules, how mechanics work, what players can do",
                             "transcript": "What happened in past sessions, what the players did",
                         },
                     }
@@ -146,7 +146,6 @@ def decide_type_expensive(question: str) -> Literal["ruleset", "transcript", "un
         response = completion(
             model=settings.utility_model,
             temperature=0.0,
-            response_format={"type": "json_object"},
             messages=[{"role": "user", "content": PROMPT_LLM_DECIDE_TYPE.format(question=question)}],
         )
         answer = response.choices[0].message.content.strip().lower()
@@ -242,20 +241,6 @@ def understand(question: str, previous_questions: list[str]) -> StructuredQuery:
             result.filters.session_date_to = date_range.get("to")
 
     return result
-    for _ in range(max_retries):
-        raw = completion(
-            model=settings.utility_model,
-            temperature=0.0,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": prompt}],
-        ).choices[0].message.content
-        try:
-            return StructuredQuery.model_validate(json.loads(raw))
-        except (json.JSONDecodeError, ValidationError):
-            continue
-
-    # Never fail the user's question because the parser misbehaved.
-    return StructuredQuery(search_text=question)
 
 if __name__ == "__main__":
     print(decide_type("Who uses the fireball spell the most?"))

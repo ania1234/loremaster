@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +32,10 @@ class Settings(BaseSettings):
     previous_questions_limit: int = 5
 
     temperature: float = 0.1
+
+    # Onboarding: the account whose ready documents are offered to new users
+    # as examples. Unset means there is nothing to offer.
+    sample_user_id: uuid.UUID | None = None
 
 
 settings = Settings()

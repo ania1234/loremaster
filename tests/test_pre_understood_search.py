@@ -138,3 +138,26 @@ def test_hybrid_search_pre_understood(monkeypatch, query, history_rows):
     # Previous questions arrive oldest first and without the current query.
     assert calls["understand"] == (query, [r["content"] for r in history_rows])
     assert calls["hybrid_search"] == (user_id, understood, 8)
+
+
+#test if hybrid_search drops a doc_type filter that rules out every chunk, instead of returning nothing
+def test_hybrid_search_relaxes_doc_type_when_empty(monkeypatch):
+    user_id = uuid.uuid4()
+    understood = StructuredQuery(search_text="What is the game about?",
+                                 filters=Filters(doc_type="transcript"))
+    row = {"id": uuid.uuid4(), "content": "A ruleset chunk."}
+    seen_doc_types = []
+
+    def fake_search(uid, structured_query, k=None):
+        seen_doc_types.append(structured_query.filters.doc_type)
+        return [] if structured_query.filters.doc_type else [row]
+
+    monkeypatch.setattr(search, "vector_search", fake_search)
+    monkeypatch.setattr(search, "keyword_search", fake_search)
+
+    result = search.hybrid_search(user_id, understood, limit=8)
+
+    assert [r["id"] for r in result] == [row["id"]]
+    assert seen_doc_types == ["transcript", "transcript", None, None]
+    # The caller's query is left untouched.
+    assert understood.filters.doc_type == "transcript"

@@ -46,5 +46,10 @@ def signed_url(
         return None, e
 
 
+def copy_object(src_path: str, dst_path: str) -> str:
+    _client.storage.from_(BUCKET).copy(src_path, dst_path)
+    return dst_path
+
+
 def delete_object(storage_path: str) -> None:
     _client.storage.from_(BUCKET).remove([storage_path])
