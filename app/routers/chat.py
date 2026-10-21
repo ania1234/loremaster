@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.auth import get_current_user
 from app.config import settings
+from app.db.models import Message
 from app.db.session import session_for_user
 from app.generation.answer import SYSTEM, verify_citations
 from app.generation.context import build_context
@@ -51,6 +52,18 @@ def prune_citations(citations: list[Citation], answer: str) -> list[Citation]:
     return [c for c in citations if c.n <= max_cited]
 
 
+def _chat_history(db, conversation_id: uuid.UUID) -> list[dict]:
+    """The last chat_history_turns question/answer pairs, oldest first."""
+    rows = (
+        db.query(Message)
+        .filter(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(settings.chat_history_turns * 2)
+        .all()[::-1]
+    )
+    return [{"role": m.role, "content": m.content} for m in rows]
+
+
 def _generate_title(question: str) -> str:
     resp = completion(
         model=settings.utility_model,
@@ -86,6 +99,7 @@ async def chat(
             stream=True,
             messages=[
                 {"role": "system", "content": SYSTEM},
+                *history,
                 {"role": "user",
                  "content": f"{context}\n\nQuestion: {body.question}"},
             ],
@@ -128,7 +142,11 @@ async def chat(
     # a yield dependency would only commit after the whole stream finishes.
     with session_for_user(user_id) as db:
         conversation_id = body.conversation_id
-        if conversation_id is None:
+        history: list[dict] = []
+        if conversation_id is not None:
+            # Read before storing the current question, so it isn't its own history.
+            history = _chat_history(db, conversation_id)
+        else:
             title = await run_in_threadpool(_generate_title, body.question)
             conv = await create_conversation(
                 ConversationCreate(title=title[:120]), user_id=user_id, db=db)

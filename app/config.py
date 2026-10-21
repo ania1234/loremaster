@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     retrieve_final: int = 8
     # How many earlier questions in the conversation understand() gets as context.
     previous_questions_limit: int = 5
+    # How many earlier question/answer pairs the chat model sees.
+    chat_history_turns: int = 3
 
     temperature: float = 0.1
 
