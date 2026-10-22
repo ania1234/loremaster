@@ -49,7 +49,7 @@ function LoadingQuips() {
   return (
     <p
       key={index}
-      className="animate-in fade-in text-center text-sm text-gray-500 duration-500"
+      className="engraver-title animate-in fade-in text-center text-sm text-gray-500 duration-500"
     >
       {LOADING_QUIPS[index]}...
     </p>
@@ -93,7 +93,7 @@ export default function HomePage() {
         />
       )}
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold">Loremaster</h1>
+        <h1 className="engraver-title text-2xl">Loremaster</h1>
         <p className="text-sm text-gray-500">Where would you like to go?</p>
         <div className="space-y-3">
           <Link

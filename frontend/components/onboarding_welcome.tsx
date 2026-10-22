@@ -62,7 +62,7 @@ export function OnboardingWelcome({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Welcome to Loremaster</CardTitle>
+        <CardTitle className="engraver-title">Welcome to Loremaster</CardTitle>
         <CardDescription>
           {samples.length > 0
             ? "Your workspace is empty. Add a few example documents to try " +
@@ -94,7 +94,7 @@ export function OnboardingWelcome({
         {samples.length > 0 ? (
           <>
             <Button onClick={handleAddExamples} disabled={busy !== null}>
-              {busy === "copy" ? "Adding examples..." : "Add examples"}
+              {busy === "copy" ? <span className="engraver-title">Adding examples...</span> : "Add examples"}
             </Button>
             <Button
               variant="outline"

@@ -137,7 +137,7 @@ export default function LoginPage() {
 
   return (
     <form onSubmit={handleLogin} className="mx-auto mt-24 max-w-sm space-y-4">
-      <h1 className="text-2xl font-semibold">Sign in to Loremaster</h1>
+      <h1 className="engraver-title text-2xl">Sign in to Loremaster</h1>
       <input
         type="email"
         value={email}
@@ -186,7 +186,7 @@ export default function LoginPage() {
         type="button"
         onClick={handleSignUp}
         disabled={busy}
-        className="w-full rounded bg-blue-600 px-3 py-2 text-white disabled:opacity-50"
+        className="w-full rounded bg-[#385A55] px-3 py-2 text-white disabled:opacity-50"
       >
         Create account
       </button>

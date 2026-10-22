@@ -202,7 +202,7 @@ export function AnswerWithCitations({
       </div>
 
       {panel && open && (
-        <aside className="sticky top-8 h-fit w-80 shrink-0 rounded border bg-gray-50 p-4">
+        <aside className="engraver-panel sticky top-8 h-fit w-80 shrink-0 border p-4">
           <div className="mb-2 flex items-start justify-between gap-2">
             <div className="text-xs text-gray-500">
               <div className="font-medium text-gray-800">
@@ -223,7 +223,7 @@ export function AnswerWithCitations({
               Could not load this source: {panel.error}
             </p>
           ) : panel.content === null ? (
-            <p className="text-sm text-gray-500">Loading...</p>
+            <p className="engraver-title text-sm text-gray-500">Loading...</p>
           ) : (
             <p className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed">
               {panel.content}

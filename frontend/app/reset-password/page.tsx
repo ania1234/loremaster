@@ -62,7 +62,7 @@ export default function ResetPasswordPage() {
   if (linkState === "checking") {
     return (
       <main className="mx-auto mt-24 max-w-sm space-y-4">
-        <p className="text-sm text-gray-500">Checking your reset link…</p>
+        <p className="engraver-title text-sm text-gray-500">Checking your reset link…</p>
       </main>
     );
   }

@@ -88,7 +88,7 @@ export default function DocumentsPage() {
     <main className="mx-auto max-w-3xl space-y-8 p-8">
       <h1 className="text-2xl font-semibold">Your materials</h1>
 
-      <form onSubmit={handleUpload} className="space-y-3 rounded border p-4">
+      <form onSubmit={handleUpload} className="engraver-panel space-y-3 border p-4">
         <input name="title" placeholder="Title" required
                value={title} onChange={(e) => setTitle(e.target.value)}
                className="w-full rounded border px-3 py-2" />
@@ -116,7 +116,7 @@ export default function DocumentsPage() {
             </label>
             <button disabled={busy}
                     className="rounded bg-black px-4 py-2 text-white disabled:opacity-50">
-              {busy ? "Uploading..." : "Upload"}
+              {busy ? <span className="engraver-title">Uploading...</span> : "Upload"}
             </button>
           </div>
         </div>
@@ -124,7 +124,7 @@ export default function DocumentsPage() {
 
       <ul className="space-y-2">
         {docs.map((d) => (
-          <li key={d.id} className="rounded border p-3">
+          <li key={d.id} className="engraver-panel border p-3">
             <div className="flex items-center justify-between">
               <span className="font-medium">{d.title}</span>
               <StatusBadge status={d.status} />

@@ -8,7 +8,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-ripple-engraving), "Iowan Old Style", Georgia, serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -50,38 +50,38 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #e1dcc6;
+  --foreground: #6e655a;
+  --card: rgba(246, 242, 231, 0.92);
+  --card-foreground: #6e655a;
+  --popover: #f6f2e7;
+  --popover-foreground: #6e655a;
+  --primary: #6e655a;
+  --primary-foreground: #f6f2e7;
+  --secondary: #e1dcc6;
+  --secondary-foreground: #6e655a;
+  --muted: #e1dcc6;
+  --muted-foreground: #81776a;
+  --accent: #e1dcc6;
+  --accent-foreground: #6e655a;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: rgba(110, 101, 90, 0.35);
+  --input: rgba(110, 101, 90, 0.35);
+  --ring: #6e655a;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0rem;
+  --sidebar: rgba(246, 242, 231, 0.92);
+  --sidebar-foreground: #6e655a;
+  --sidebar-primary: #6e655a;
+  --sidebar-primary-foreground: #f6f2e7;
+  --sidebar-accent: #e1dcc6;
+  --sidebar-accent-foreground: #6e655a;
+  --sidebar-border: rgba(110, 101, 90, 0.35);
+  --sidebar-ring: #6e655a;
 }
 
 .dark {
@@ -128,4 +128,119 @@
   html {
     @apply font-sans;
   }
+}
+/* One fixed decorative field shared by every route. */
+body {
+  isolation: isolate;
+  background-color: #e1dcc6;
+}
+
+.engraver-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: #e1dcc6;
+}
+
+/* Quiet surfaces keep the dense background lettering out of the UI text. */
+body > header,
+body > div > nav {
+  --engraver-content-surface: 1;
+  background-color: var(--card);
+}
+
+.page-content > main,
+.page-content > form {
+  --engraver-content-surface: 1;
+  background-color: var(--card);
+}
+
+.page-content > form,
+.page-content > main.max-w-sm {
+  padding: 1.5rem;
+  border-radius: 0;
+}
+
+.page-content > main.max-w-md,
+.page-content > main.max-w-3xl {
+  border-radius: 0;
+}
+
+/* The chat fills its column; retain the field around its reading area. */
+.page-content > main.h-full {
+  --engraver-content-surface: 0;
+  background: transparent;
+}
+
+.page-content > main.h-full > h1,
+.page-content > main.h-full > form,
+.page-content > main.h-full > div > div {
+  --engraver-content-surface: 1;
+  background-color: var(--card);
+}
+
+
+/* Surface treatment from the demo's settings card. The marker also excludes
+   these panels and their descendants from background pointer effects. */
+.engraver-panel,
+[data-slot="card"],
+body > header,
+body > div > nav,
+.page-content > main:not(.h-full),
+.page-content > form,
+.page-content > main.h-full > h1,
+.page-content > main.h-full > form,
+.page-content > main.h-full > div > div {
+  --engraver-content-surface: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: 0 1px 0 #f6f2e7 inset, 0 6px 24px rgba(110, 101, 90, 0.18);
+}
+
+.engraver-title {
+  font-family: var(--font-ripple-engraving), "Iowan Old Style", Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+:where(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+.page-content :is(button, input, select, textarea),
+body > header button,
+[data-slot="card-header"],
+[data-slot="card-footer"] {
+  border-radius: 0;
+}
+
+.page-content :is(input:not([type="file"]), select, textarea) {
+  background-color: #f6f2e7;
+}
+
+/* Keep neutral text and actions in the same warm ink as the reference. */
+:is(.page-content, body > header) :is(.text-gray-400, .text-gray-500, .text-gray-600, .text-gray-700, .text-gray-800) {
+  color: var(--foreground);
+}
+
+.page-content .bg-black {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.page-content .prose {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-links: var(--foreground);
 }

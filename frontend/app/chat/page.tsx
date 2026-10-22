@@ -227,7 +227,7 @@ function Chat({
         <div className="mx-auto max-w-5xl space-y-6 px-8 py-2">
 
           {history === "loading" && (
-            <p className="text-sm text-gray-500">Loading conversation...</p>
+            <p className="engraver-title text-sm text-gray-500">Loading conversation...</p>
           )}
           {history === "failed" && (
             <p className="text-sm text-red-700">Could not load this conversation.</p>
@@ -253,7 +253,7 @@ function Chat({
               <UserMessage content={pending.question} />
               <AssistantMessage>
                 {phase === "searching" ? (
-                  <p className="text-sm text-gray-500">Searching your materials...</p>
+                  <p className="engraver-title text-sm text-gray-500">Searching your materials...</p>
                 ) : (
                   <AnswerWithCitations
                     answer={pending.answer}
@@ -300,7 +300,7 @@ function UserMessage({ content }: { content: string }) {
 function AssistantMessage({ children }: { children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs font-medium text-gray-500">Loremaster</p>
+      <p className="engraver-title text-xs text-gray-500">Loremaster</p>
       {children}
     </div>
   );
