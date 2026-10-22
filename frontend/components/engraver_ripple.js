@@ -1,3 +1,5 @@
+import { ENGRAVER_GRID, ENGRAVER_TILE } from "./engraver_text";
+
 /** Decorative renderer adapted from the supplied Engraver's Ripple demo.
  * @param {HTMLCanvasElement} canvas
  */
@@ -5,16 +7,10 @@ export function mountEngraverRipple(canvas) {
   /* ============================================================
      CONFIG — change the background text and look here.
      ============================================================ */
-  const DEFAULT_TEXT = `
-Is anyone else weirded out by the huge amount of sexual/romantic things that get posted about in games?
-My group has been playing for over ten years, and not once has a single one of our characters gotten into any kind of sexual or romantic situation. I can't even imagine having an NPC described to me and thinking 'yes, I am going to roleplay hitting on this character, with my old friend the DM playing the person I am hitting on'.
-Maybe playing with people I've known for a long time makes it weirder- I know a lot of people are playing online with strangers, maybe that has a different kind of vibe to it. I did once play with people from work and the DM did make it sexually weird at one point- a lot of what I see in this category is actually on r/rpghorrorstories, and this encounter belongs there too. But in a game about fantasy and monsters and treasure and dungeons, sex and romance is for me an instant game killer. It makes it super weird and uncomfortable. I can see that there is a big difference between someone doing what their character would do, and someone using the game to act out bizarre fantasies, but even the former I woud find uncomfortable to sit through.
-People play how they play and like what they like, maybe this comes down to people enjoying the roleplay element a lot more than the stats and numbers and combat element. I can't be the only one who is 100% put off the game by any sex and romance. Monsters and dungeons for me please. Does anyone else have absolutely none of this in their games?
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`;
+
 
   const CONFIG = {
-    text: DEFAULT_TEXT,
-    fontSize: 10,            // px
+    fontSize: ENGRAVER_GRID.fontSize,            // px
     font: "engr",            // "engr" (IM Fell English) or "type" (Special Elite)
     ink:   "#6E655A",        // text colour
     paper: "#E1DCC6",        // background
@@ -37,9 +33,7 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor i
 
   /* ============================================================ */
   const ctx = canvas.getContext("2d");
-  const layer = document.createElement("canvas");
-  const lctx = layer.getContext("2d");
-  if (!ctx || !lctx) return () => {};
+  if (!ctx) return () => {};
   const motion = 1;
   let animationId = 0;
   let disposed = false;
@@ -60,48 +54,34 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor i
   });
 
 
-  function normalise(t) {
-    const s = String(t || "").replace(/\s+/g, " ").trim();
-    return (s || DEFAULT_TEXT) + " ";
-  }
   function fontString() { return `${CONFIG.fontSize}px ${FONTS[CONFIG.font]}`; }
 
   function rebuild() {
     if (disposed) return;
     dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     W = window.innerWidth; H = window.innerHeight;
-    for (const c of [canvas, layer]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
     canvas.style.width = W + "px"; canvas.style.height = H + "px";
 
-    cellW = CONFIG.fontSize * 0.64;
-    lineH = CONFIG.fontSize * 1.25;
-    base = lineH * 0.77;
+    cellW = ENGRAVER_GRID.cellWidth;
+    lineH = ENGRAVER_GRID.lineHeight;
+    base = ENGRAVER_GRID.baseline;
     cols = Math.ceil(W / cellW) + 1;
     rows = Math.ceil(H / lineH) + 1;
 
-    const text = normalise(CONFIG.text);
     const n = cols * rows;
     glyphs = new Array(n);
-    for (let i = 0; i < n; i++) glyphs[i] = text[i % text.length];
+    for (let i = 0; i < n; i++) {
+      const row = Math.floor(i / cols), column = i % cols;
+      glyphs[i] = ENGRAVER_TILE[row % ENGRAVER_GRID.rows][column % ENGRAVER_GRID.columns];
+    }
     seen = new Int32Array(n); hf = new Float32Array(n);
     wh = new Float32Array(n); wx = new Float32Array(n); wy = new Float32Array(n); wc = new Uint8Array(n);
 
-    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    lctx.fillStyle = CONFIG.paper;
-    lctx.fillRect(0, 0, W, H);
-    lctx.font = fontString();
-    lctx.textAlign = "center";
-    lctx.textBaseline = "alphabetic";
-    lctx.fillStyle = CONFIG.ink;
-    for (let r = 0; r < rows; r++) {
-      const y = r * lineH + base;
-      for (let c = 0; c < cols; c++) {
-        const ch = glyphs[r * cols + c];
-        if (ch !== " ") lctx.fillText(ch, c * cellW + cellW / 2, y);
-      }
-    }
+    // The SVG remains the permanent text field. Resizing clears only effects.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(layer, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
   /* ---------- interaction state ---------- */
@@ -196,9 +176,9 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor i
       }
     }
 
-    // Draw: static layer, cleared cells, ripple shading, live glyphs
+    // Clear old effects, then cover and redraw only the affected SVG cells.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(layer, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (list.length) {
@@ -303,14 +283,14 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor i
   document.addEventListener("visibilitychange", resetMotion);
   reducedMotion.addEventListener("change", resetMotion);
   rebuild();
-  Promise.all([
-    document.fonts.load(fontString()),
-    document.fonts.load(`${CONFIG.fontSize}px ${CJK_FONT}`, CONFIG.gibberish),
-  ]).then(rebuild, rebuild);
+  document.fonts.load(fontString()).then(rebuild, rebuild);
+  document.fonts.load(`${CONFIG.fontSize}px ${CJK_FONT}`, CONFIG.gibberish).then(rebuild, rebuild);
   return () => {
     disposed = true;
     cancelAnimationFrame(animationId);
     clearTimeout(resizeTimer);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     window.removeEventListener("pointermove", pointerMove);
     window.removeEventListener("pointerdown", pointerDown);
     document.documentElement.removeEventListener("pointerleave", pointerLeave);
