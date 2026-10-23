@@ -38,11 +38,12 @@ async def get_onboarding(
 @limiter.limit("2/minute")
 async def add_samples(
     request: Request,
+    again: bool = False,    # from chat's FAQ, for users past onboarding
     user_id: uuid.UUID = Depends(get_current_user),
 ):
     # Seconds of blocking DB and storage calls -- keep them off the event loop.
     try:
-        doc_ids = await asyncio.to_thread(copy_samples, user_id)
+        doc_ids = await asyncio.to_thread(copy_samples, user_id, again=again)
     except AlreadyOnboarded:
         raise HTTPException(status.HTTP_409_CONFLICT, "already onboarded")
     except NoSamples:

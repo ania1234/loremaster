@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, use, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Parent, PhrasingContent, Root, RootContent } from "mdast";
@@ -64,8 +65,44 @@ const CitationContext = createContext<{
   show: (c: Citation) => void;
 } | null>(null);
 
+// The FAQ answer's link for users who skipped onboarding: copies the example
+// documents, then shows them, like OnboardingWelcome's "Add examples".
+function AddExamplesLink({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch("/api/onboarding/samples?again=true", { method: "POST" });
+    } catch {
+      setError("Couldn't add the examples. Please try again.");
+      setBusy(false);
+      return;
+    }
+    router.push("/documents");
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleClick}
+        disabled={busy}
+        className="font-medium underline disabled:opacity-60"
+      >
+        {busy ? "Adding examples..." : children}
+      </button>
+      {error && <span className="ml-1 text-red-600">{error}</span>}
+    </>
+  );
+}
+
 function CitationLink({ href, children }: React.ComponentProps<"a">) {
   const { citations, open, show } = use(CitationContext)!;
+  if (href === "#add-examples") return <AddExamplesLink>{children}</AddExamplesLink>;
+
   const n = href?.match(/^#cite-(\d+)$/)?.[1];
   if (!n) {
     return (

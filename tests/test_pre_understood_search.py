@@ -11,14 +11,13 @@ from app.retrieval.understand import (
     Filters,
     StructuredQuery,
     decide_date_range,
-    decide_scope,
-    decide_type,
+    decide_type_and_scope,
     understand,
 )
 
 load_dotenv()
 
-# decide_type / decide_scope call the Typesafe JEV API; decide_date_range and the
+# decide_type_and_scope calls the Typesafe JEV API; decide_date_range and the
 # fallbacks inside understand() call the utility model through litellm.
 needs_jev = pytest.mark.skipif(
     not os.environ.get("TYPESAFE_API_KEY"), reason="needs TYPESAFE_API_KEY")
@@ -26,22 +25,22 @@ needs_llm = pytest.mark.skipif(
     not os.environ.get("OPENAI_API_KEY"), reason="needs OPENAI_API_KEY")
 
 
-#test if decide_type from understand.py returns the correct type for a given question
+#test if decide_type_and_scope from understand.py returns the correct type for a given question
 @needs_jev
 @pytest.mark.parametrize("question, expected", [
     ("How many spell slots does a 5th level wizard have?", "ruleset"),
 ])
 def test_decide_type(question, expected):
-    assert decide_type(question) == expected
+    assert decide_type_and_scope(question)[0] == expected
 
 
-#test if decide_scope from understand.py returns the correct scope for a given question
+#test if decide_type_and_scope from understand.py returns the correct scope for a given question
 @needs_jev
 @pytest.mark.parametrize("question, expected", [
     ("List every NPC the party has met so far.", "broad"),
 ])
 def test_decide_scope(question, expected):
-    assert decide_scope(question) == expected
+    assert decide_type_and_scope(question)[1] == expected
 
 
 #test if decide_date_range from understand.py returns the correct date range for a given question

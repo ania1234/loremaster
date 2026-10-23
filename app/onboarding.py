@@ -85,8 +85,11 @@ def _read_samples() -> list[tuple[dict, list[dict]]]:
         return samples
 
 
-def copy_samples(user_id: uuid.UUID) -> list[uuid.UUID]:
+def copy_samples(user_id: uuid.UUID, *, again: bool = False) -> list[uuid.UUID]:
     """Copy every sample into the user's workspace and mark them onboarded.
+
+    again=True copies for a user who is already onboarded (they skipped, or
+    deleted the examples); samples they still own are not copied twice.
 
     The documents, chunks and the onboarded flag are written in one
     transaction. Storage is not transactional, so the files copied before a
@@ -100,7 +103,7 @@ def copy_samples(user_id: uuid.UUID) -> list[uuid.UUID]:
         with session_for_user(user_id) as db:
             # Locked so a double click or a second tab can't copy twice.
             profile = get_or_create_profile(db, user_id, lock=True)
-            if profile.onboarded_at is not None:
+            if profile.onboarded_at is not None and not again:
                 raise AlreadyOnboarded
 
             samples = _read_samples()
@@ -137,7 +140,8 @@ def copy_samples(user_id: uuid.UUID) -> list[uuid.UUID]:
                     ])
                 new_ids.append(doc_id)
 
-            profile.onboarded_at = func.now()
+            if profile.onboarded_at is None:
+                profile.onboarded_at = func.now()
         return new_ids
 
     except Exception:

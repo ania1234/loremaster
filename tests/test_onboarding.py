@@ -104,6 +104,17 @@ def test_second_copy_is_refused(env):
     assert env.copied == []
 
 
+def test_copy_again_after_onboarding(env):
+    env.profile.onboarded_at = "earlier"
+    env.db.owned_hashes = ["a"]
+
+    ids = onboarding.copy_samples(USER, again=True)
+
+    assert [d.file_hash for d in env.db.added] == ["b"]
+    assert len(ids) == 1
+    assert env.profile.onboarded_at == "earlier"
+
+
 def test_failed_insert_removes_copied_files(env):
     env.db.fail_insert = True
 

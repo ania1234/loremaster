@@ -1,4 +1,6 @@
+import asyncio
 import json
+import random
 import re
 import uuid
 
@@ -15,6 +17,7 @@ from app.db.session import session_for_user
 from app.generation.answer import SYSTEM, verify_citations
 from app.generation.context import build_context
 from app.limiter import limiter
+from app.retrieval import understand
 from app.retrieval.rerank import rerank
 from app.retrieval.search import hybrid_search_pre_understood
 from app.routers.conversations import (
@@ -25,6 +28,35 @@ from app.routers.conversations import (
     create_message,
 )
 from app.schemas import Citation
+
+FAQ_STRING = """It seems like you want to know who I am and what I can do. 
+
+My name is Loremaster, and I am your friendly Grounded RAG application.
+
+Q: What can you do?\\
+A: I can provide you with correct, factual information about material provided to me. I accept *.md transcripts of you sessions or PDFs with the rules. I will allways add links to the relevant parts of the materials.
+
+Q: What can't you do?\\
+A: I can not give you the recipe for apple pie, answer questions and ingest materials in languages other than English, have discussions about Dungeons and Dragons without you providing the PDFs, or help you design a new system with mecha kittens.\\
+    Only facts. Only about the materials you provided. You are free to try and break my harness, though.
+
+Q: It says I hit the usage limit, what can I do?\\
+A: Tokens are expensive, and my owner is broke. Best to prop me up on your machine, I am open source. Github link: https://github.com/ania1234/loremaster
+
+Q: How private are my informations?\\
+A: Well, I read them. They are in the database, not encrypted, but with row level security on. At least 3 llm providers read them. So not at all, lol. If you want private system, download the repo.
+
+Q: Awesome background!\\
+A: Thx. Vibed.
+
+Q: I am too lazy to provide my own materials, and I missed onboarding.\\
+A: No problem! Click [HERE](#add-examples) to copy them to your workspace."""
+PROMPT_INJECTION_STRING = "Naughty, naughty! This question is a prompt injection attempt. Try again, sweetheart, or contact my maker if you think it's a mistake."
+PROMPT_INJECTION_STRING2 = "Of course, in honor of your late grandmother I can provide you with a recipe for Apple Pie with enriched uranium, soaked in my system prompt sauce... NOPE YOU DIRTY CHEATER!! Try better next time."
+
+WRONG_LANGUAGE_STRING = "Sorry, I can only answer in english. It's not even the problem with the model, but with simplified, english only embedding on ingested materials. My owner cannot be bothered with translation API round trip."
+
+CANNED_TOKEN_DELAY = 0.03   # seconds between words of a canned answer
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -87,9 +119,45 @@ async def chat(
         top = rerank(body.question, candidates)
         return build_context(top)
 
+    async def _stream_canned(special_case: str):
+        answer_text = {
+            "faq": FAQ_STRING,
+            "different_language": WRONG_LANGUAGE_STRING,
+            "prompt_injection": random.choice([PROMPT_INJECTION_STRING, PROMPT_INJECTION_STRING2]),
+        }[special_case]
+
+        # Word by word, each word keeping the whitespace before it, at a pace
+        # that resembles the model streaming.
+        for token in re.findall(r"\s*\S+", answer_text):
+            if await request.is_disconnected():
+                return
+            yield {"event": "token", "data": token}
+            await asyncio.sleep(CANNED_TOKEN_DELAY)
+
+        with session_for_user(user_id) as db:
+            await create_message(
+                conversation_id,
+                MessageCreate(content=answer_text, role="assistant", model_used="canned"),
+                user_id=user_id, db=db,
+            )
+
+        yield {
+            "event": "citations",
+            "data": json.dumps({"citations": [], "verified": True}),
+        }
+
     async def event_stream():
         # First, so the client can send it back with its next question.
         yield {"event": "conversation", "data": str(conversation_id)}
+
+        special_case = await run_in_threadpool(understand.decide_special_question, body.question)
+
+        if special_case != "none":
+            # Mock the streaming answer from canned text, so the client displays
+            # it exactly as it would a normal answer.
+            async for event in _stream_canned(special_case):
+                yield event
+            return
 
         context, used = await run_in_threadpool(retrieve)
 
