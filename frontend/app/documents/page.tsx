@@ -85,7 +85,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-8 p-8">
+    <main className="mx-auto min-h-full max-w-3xl space-y-8 p-8">
       <h1 className="text-2xl font-semibold">Your materials</h1>
 
       <form onSubmit={handleUpload} className="engraver-panel space-y-3 border p-4">

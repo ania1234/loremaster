@@ -15,8 +15,8 @@ export function UserBar() {
   const router = useRouter();
 
   useEffect(() => {
-    // INITIAL_SESSION fires on mount, so this covers the first paint as well
-    // as later sign-in/sign-out events.
+    // INITIAL_SESSION fills in the account details after mount; the header
+    // already reserves its height while the session is being restored.
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setEmail(session?.user.email ?? null);
     });
@@ -28,18 +28,22 @@ export function UserBar() {
     router.push("/");
   }
 
-  if (HIDDEN_ON.has(pathname) || !email) return null;
+  if (HIDDEN_ON.has(pathname)) return null;
 
   return (
-    <header className="flex items-center justify-end gap-3 border-b px-8 py-3 text-sm">
-      <span className="text-gray-600">Logged in as {email}</span>
-      <button
-        type="button"
-        onClick={handleSignOut}
-        className="rounded border px-3 py-1 hover:bg-gray-50"
-      >
-        Log out
-      </button>
+    <header className="flex h-14 shrink-0 items-center justify-end gap-3 border-b px-8 text-sm">
+      {email && (
+        <>
+          <span className="min-w-0 truncate text-gray-600">Logged in as {email}</span>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="shrink-0 rounded border px-3 py-1 hover:bg-gray-50"
+          >
+            Log out
+          </button>
+        </>
+      )}
     </header>
   );
 }

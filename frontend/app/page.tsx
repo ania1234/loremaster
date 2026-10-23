@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { LoremasterLogo } from "@/components/loremaster_logo";
 
 type Status =
   | { kind: "error"; message: string }
@@ -137,6 +138,9 @@ export default function LoginPage() {
 
   return (
     <form onSubmit={handleLogin} className="mx-auto mt-24 max-w-sm space-y-4">
+      <div className="mb-6 border-b border-[#385A55]/15 pb-5">
+        <LoremasterLogo />
+      </div>
       <h1 className="engraver-title text-2xl">Sign in to Loremaster</h1>
       <input
         type="email"

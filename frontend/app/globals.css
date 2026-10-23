@@ -233,6 +233,29 @@ body {
   font-family: inherit;
 }
 
+/* A small tonal shift works with filled, outlined, and text-only actions. */
+:is(button, [role="button"], [data-slot="button"], label:has(input[type="file"])) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform, filter;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+@media (hover: hover) {
+  :is(button, [role="button"], [data-slot="button"], label:has(input[type="file"])):not(:disabled, [aria-disabled="true"], [data-disabled], :has(input:disabled)):hover {
+    filter: brightness(0.94);
+  }
+
+  .dark :is(button, [role="button"], [data-slot="button"], label:has(input[type="file"])):not(:disabled, [aria-disabled="true"], [data-disabled], :has(input:disabled)):hover {
+    filter: brightness(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(button, [role="button"], [data-slot="button"], label:has(input[type="file"])) {
+    transition-duration: 0s;
+  }
+}
+
 .page-content :is(button, input, select, textarea),
 body > header button,
 [data-slot="card-header"],

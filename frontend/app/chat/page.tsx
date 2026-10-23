@@ -224,7 +224,7 @@ function Chat({
         onScroll={onScroll}
         className="min-h-0 flex-1 overflow-y-auto"
       >
-        <div className="mx-auto max-w-5xl space-y-6 px-8 py-2">
+        <div className="mx-auto min-h-full max-w-5xl space-y-6 px-8 py-2">
 
           {history === "loading" && (
             <p className="engraver-title text-sm text-gray-500">Loading conversation...</p>
@@ -278,7 +278,7 @@ function Chat({
         />
         <button
           disabled={phase !== "idle" || history !== "ready"}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
+          className="rounded bg-[#385A55] px-4 py-2 text-white disabled:opacity-50"
         >
           Ask
         </button>
