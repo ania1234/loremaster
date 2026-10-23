@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FileText, MessageSquare, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useNavMenu } from "@/components/nav_menu";
 
 const LINKS = [
   { href: "/documents", label: "Documents", icon: FileText },
@@ -21,6 +22,10 @@ type Conversation = { id: string; title: string | null };
 // future standalone screen unless it opts in here.
 const SHOWN_ON: ReadonlySet<string> = new Set(LINKS.map((l) => l.href));
 
+export function hasSideNav(pathname: string) {
+  return SHOWN_ON.has(pathname);
+}
+
 function linkClass(active: boolean) {
   return cn(
     "flex items-center gap-2 rounded px-3 py-2 text-sm",
@@ -32,20 +37,40 @@ function linkClass(active: boolean) {
 
 export function SideNav() {
   const pathname = usePathname();
+  const menu = useNavMenu();
 
-  if (!SHOWN_ON.has(pathname)) return null;
+  if (!hasSideNav(pathname)) return null;
 
   return (
-    <nav className="w-52 shrink-0 overflow-y-auto border-r bg-sidebar p-3">
-      {/* useSearchParams needs a Suspense boundary, or `next build` fails. */}
-      <Suspense>
-        <NavLinks pathname={pathname} />
-      </Suspense>
-    </nav>
+    <>
+      {/* Below md the nav is a drawer over the page, opened from the user bar;
+          tapping beside it closes it, like the button does. */}
+      {menu.open && (
+        <div
+          aria-hidden
+          onClick={menu.close}
+          className="fixed inset-x-0 top-14 bottom-0 z-30 bg-black/30 md:hidden"
+        />
+      )}
+      <nav
+        id="side-nav"
+        className={cn(
+          "w-52 shrink-0 overflow-y-auto border-r bg-sidebar p-3",
+          menu.open
+            ? "max-md:fixed max-md:top-14 max-md:bottom-0 max-md:left-0 max-md:z-40 max-md:w-64 max-md:max-w-[80vw] max-md:shadow-lg max-md:backdrop-blur-sm"
+            : "max-md:hidden",
+        )}
+      >
+        {/* useSearchParams needs a Suspense boundary, or `next build` fails. */}
+        <Suspense>
+          <NavLinks pathname={pathname} onNavigate={menu.close} />
+        </Suspense>
+      </nav>
+    </>
   );
 }
 
-function NavLinks({ pathname }: { pathname: string }) {
+function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // The conversation open in the chat; null on a new one or another page.
@@ -98,6 +123,7 @@ function NavLinks({ pathname }: { pathname: string }) {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
+                onClick={onNavigate}
                 className={linkClass(active)}
               >
                 <Icon className="size-4" aria-hidden />
@@ -123,6 +149,7 @@ function NavLinks({ pathname }: { pathname: string }) {
                     href={`/chat?c=${c.id}`}
                     aria-current={active ? "page" : undefined}
                     title={title}
+                    onClick={onNavigate}
                     className={cn(linkClass(active), "pr-8")}
                   >
                     <span className="truncate">{title}</span>

@@ -13,6 +13,7 @@ for i in range(0, 1):
         ],
         temperature=settings.temperature
     )
+    print(f"Model: {settings.chat_model}")
     print(f"Temperature {settings.temperature}, try {i}")
     print(response.choices[0].message.content)
     print("---")
