@@ -1,113 +1,66 @@
 import asyncio
 import os
-import time
-import uuid
+import sys
 
 from arq.connections import RedisSettings
 
-from app.db.models import Document
-from app.db.session import session_for_user
-from app.db.store import store_chunks
-from app.ingestion.chunk import chunk_document
-from app.ingestion.embed import embed_chunks
-from app.ingestion.extract import extract_pages, is_scanned
-from app.ingestion.normalise import normalise
-from app.storage import download_to_temp
+# This process stays up around the clock and is billed for the memory it holds,
+# so it must stay small: never import the pipeline (litellm, pymupdf4llm, ...)
+# here. Each job runs in a child process instead -- see app/ingest_job.py.
 
 REDIS = RedisSettings.from_dsn(
     os.environ.get("REDIS_URL", "redis://localhost:6379")
 )
 
+JOB_TIMEOUT = 900
 
-def _set_status(doc_id, status, uid: uuid.UUID, error=None, page_count=None):
-    with session_for_user(uid) as db:
-        doc = db.get(Document, doc_id)
-        doc.status = status
-        doc.error_message = error
-        if page_count is not None:
-            doc.page_count = page_count
-    print(f"worker: set status for {doc_id} to {status} (error={error})")
+# Exit code for "the job failed, and the document already says why".
+FAILURE_RECORDED = 3
 
 
-def _ingest_sync(document_id: str, uid: uuid.UUID):
-    """The whole pipeline, start to finish, synchronously.
+def _job_command(*args: str) -> list[str]:
+    return [sys.executable, "-m", "app.ingest_job", *args]
 
-    Every step below is blocking (pymupdf, litellm, psycopg), so this must not
-    run on the event loop -- see ingest_document.
-    """
-    doc_id = uuid.UUID(document_id)
-    started = time.perf_counter()
 
-    print(f"worker: starting ingestion for {doc_id} (user {uid})")
-    # session_for_user commits on exit, which expires `doc` -- copy out
-    # everything the pipeline needs while the session is still open.
-    with session_for_user(uid) as db:
-        doc = db.get(Document, doc_id)
-        user_id = doc.user_id
-        session_date = doc.session_date
-        storage_path = doc.storage_path
-        doc_type = doc.doc_type
-        file_hash = doc.file_hash
-
-    # The API and the worker are separate containers, so the only copy of the
-    # file they share is the one in Supabase Storage.
-    temp_path = download_to_temp(storage_path)
-    print(f"worker: downloaded {storage_path} to {temp_path}")
-
+async def _run_child(*args: str, timeout: float | None = None) -> int:
+    proc = await asyncio.create_subprocess_exec(*_job_command(*args))
     try:
-        _set_status(doc_id, "processing", uid)
-
-        # Design doc section 6, step 0 -- reject scans with a clear message
-        if  is_scanned(temp_path):
-            _set_status(
-                doc_id, "failed",
-                uid=uid,
-                error="This PDF contains images rather than selectable text "
-                      "(it looks like a scan). Re-export it from the original "
-                      "source, or run OCR before uploading.",
-            )
-            return
-
-        # Extraction is minutes of CPU on a rulebook, so each stage reports how
-        # long it took -- otherwise "processing" is an unexplained black box.
-        t0 = time.perf_counter()
-        pages = normalise(extract_pages(temp_path, doc_type))
-        print(f"worker: {doc_id} extracted {len(pages)} pages "
-              f"in {time.perf_counter() - t0:.1f}s")
-
-        chunks = chunk_document(pages, doc_type)
-        print(f"worker: {doc_id} chunked into {len(chunks)} chunks")
-        if not chunks:
-            _set_status(doc_id, "failed", uid=uid, error="No readable text was found in this document.")
-            return
-
-        date_str = session_date.isoformat() if session_date else None
-        t0 = time.perf_counter()
-        vectors = embed_chunks(chunks, session_date=date_str)
-        print(f"worker: {doc_id} embedded {len(vectors)} chunks "
-              f"in {time.perf_counter() - t0:.1f}s")
-
-        store_chunks(chunks, vectors, str(user_id), file_hash)   # one transaction
-        _set_status(doc_id, "ready", uid=uid, page_count=len(pages))
-        print(f"ingested {doc_id}: {len(chunks)} chunks from {len(pages)} pages "
-              f"in {time.perf_counter() - started:.1f}s total")
-
-    except Exception as exc:
-        print(f"worker: {doc_id} failed after {time.perf_counter() - started:.1f}s: {exc}")
-        _set_status(doc_id, "failed", uid=uid, error=f"Ingestion failed: {exc}")
-        raise            # re-raise so ARQ logs it and retry policy applies
-
+        return await asyncio.wait_for(proc.wait(), timeout)
     finally:
-        #cleanup: remove the downloaded file (also on the early returns above)
-        temp_path.unlink(missing_ok=True)
+        # Reached with the child still running on a timeout, or when arq
+        # cancels the job at shutdown (arq then re-queues it).
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
 
 
-async def ingest_document(ctx, document_id: str, uid: uuid.UUID):
-    # The pipeline is entirely blocking. Running it inline would freeze the arq
-    # event loop for its whole duration -- the worker would stop polling the
-    # queue, stop heart-beating, and could not enforce job_timeout, so max_jobs
-    # would be capped at 1 in practice. Hand it to a thread instead.
-    await asyncio.to_thread(_ingest_sync, document_id, uid)
+async def _record_failure(document_id: str, uid: str, message: str):
+    """Mark the document failed for a child that could not do so itself."""
+    code = await _run_child("--mark-failed", document_id, uid, message)
+    if code != 0:
+        print(f"worker: could not mark {document_id} failed (exit code {code})")
+
+
+async def ingest_document(ctx, document_id: str, uid: str):
+    try:
+        code = await _run_child(document_id, uid, timeout=JOB_TIMEOUT)
+    except TimeoutError:
+        await _record_failure(
+            document_id, uid,
+            f"Ingestion failed: it took longer than {JOB_TIMEOUT // 60} minutes.",
+        )
+        raise
+
+    if code == 0:
+        return
+    # Anything else died before it could record a reason: out of memory, a
+    # crash, or an error before the pipeline started. Without this the document
+    # would sit in "processing" forever.
+    if code != FAILURE_RECORDED:
+        await _record_failure(
+            document_id, uid, "Ingestion failed: the job stopped unexpectedly.",
+        )
+    raise RuntimeError(f"ingestion of {document_id} failed (exit code {code})")
 
 
 async def hello(ctx, name: str):
@@ -120,4 +73,6 @@ class WorkerSettings:
     functions = [ingest_document, hello]
     redis_settings = REDIS
     max_jobs = 2
-    job_timeout = 900
+    # A backstop only: leaves ingest_document time to stop a child that hits
+    # JOB_TIMEOUT and record the failure before arq cancels it.
+    job_timeout = JOB_TIMEOUT + 60
