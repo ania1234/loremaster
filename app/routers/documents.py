@@ -3,6 +3,7 @@ import re
 import uuid
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 import pymupdf
 from fastapi import (
@@ -62,7 +63,7 @@ async def upload(
     request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
-    doc_type: str = Form(...),
+    doc_type: Literal["ruleset", "transcript"] = Form(...),
     db: Session = Depends(get_db_for_user),
     user_id: uuid.UUID = Depends(get_current_user),
 ):
