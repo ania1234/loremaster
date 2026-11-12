@@ -32,7 +32,10 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 # from Supabase Storage, since it runs in a different container.
 UPLOAD_DIR = Path("data/uploads")
 
-SESSION_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+# Matches Supabase Storage's default per-file limit.
+MAX_UPLOAD_BYTES = 50_000_000
+
+SESSION_DATE_RE =re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
 
 def parse_session_date(filename: str | None) -> date | None:
@@ -66,6 +69,11 @@ async def upload(
     ext = Path(file.filename).suffix.lower()
     if not ext.endswith((".pdf", ".md")):
         raise HTTPException(400, "only PDF and md files are supported")
+
+    # Starlette has spooled the upload to disk by now; read() would put all of
+    # it in memory, so a huge file could take the API down for everyone.
+    if file.size is None or file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"files are limited to {MAX_UPLOAD_BYTES // 1_000_000} MB")
 
     data = await file.read()
 
