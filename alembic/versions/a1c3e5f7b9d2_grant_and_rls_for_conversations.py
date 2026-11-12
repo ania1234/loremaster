@@ -23,6 +23,16 @@ TABLES = ('conversations', 'messages', 'message_citations')
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # The role was first made by hand; create it on a fresh database so the
+    # grants below don't fail. NOLOGIN: give it a password and LOGIN yourself
+    # (ALTER ROLE loremaster_app WITH LOGIN PASSWORD '...'), never in git.
+    op.execute(f"""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN
+                CREATE ROLE {APP_ROLE} NOLOGIN;
+            END IF;
+        END $$
+    """)
     for table in TABLES:
         op.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {APP_ROLE}')
         op.execute(f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY')
