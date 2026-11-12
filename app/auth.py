@@ -1,7 +1,7 @@
 import uuid
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import settings
@@ -12,6 +12,7 @@ _jwks_client = jwt.PyJWKClient(f"{_issuer}/.well-known/jwks.json")
 
 
 async def get_current_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials = Depends(security),
 ) -> uuid.UUID:
     try:
@@ -31,4 +32,6 @@ async def get_current_user(
     sub = payload.get("sub")
     if not sub:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token has no subject")
-    return uuid.UUID(sub)
+    user_id = uuid.UUID(sub)
+    request.state.user_id = user_id     # the rate limit key, see app/limiter.py
+    return user_id
