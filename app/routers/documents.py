@@ -74,9 +74,22 @@ async def upload(
 
     #send the document to cloud storage (Supabase) instead of local storage
 
-    doc_id = uuid.uuid4()
     file_hash = hashlib.sha256(data).hexdigest()
+    redis = request.app.state.redis
 
+    # Checked before the storage upload, so a repeat upload leaves no orphan file.
+    existing = (db.query(Document)
+                  .filter(Document.user_id == user_id, Document.file_hash == file_hash)
+                  .first())
+    if existing is not None:
+        if existing.status == "ready":
+            return DocumentCreated(id=existing.id, status="ready")
+        # pending, processing or failed: queue it again. If a job for it is
+        # still queued or running, enqueue_ingest is a no-op.
+        await enqueue_ingest(redis, existing.id, user_id)
+        return DocumentCreated(id=existing.id, status="pending")
+
+    doc_id = uuid.uuid4()
     cloud_path = upload_pdf(user_id, doc_id, data)
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -92,12 +105,22 @@ async def upload(
     session_date = parse_session_date(file.filename)
 
     doc_id, pending = store_document(cloud_path, str(user_id), doc_type, title, pages_no, str(doc_id), file_hash, session_date)
-    redis = request.app.state.redis
-    if pending:
-        job = await redis.enqueue_job("ingest_document", str(doc_id), str(user_id))
-    else:
+    if not pending:
         return DocumentCreated(id=doc_id, status="ready")
+    await enqueue_ingest(redis, doc_id, user_id)
     return DocumentCreated(id=doc_id, status="pending")
+
+
+async def enqueue_ingest(redis, doc_id, user_id) -> None:
+    """Queue ingestion, at most one job per document at a time.
+
+    arq refuses a job whose id is already queued or running, so a repeat
+    upload can't start a second job that stores every chunk twice.
+    WorkerSettings.keep_result = 0 lets the id be reused once the job ends,
+    so a failed document can still be retried.
+    """
+    await redis.enqueue_job("ingest_document", str(doc_id), str(user_id),
+                            _job_id=f"ingest:{doc_id}")
 
 @router.get("/download/{doc_id}", response_model=DownloadLinkOut)
 @limiter.limit("10/minute")

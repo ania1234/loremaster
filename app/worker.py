@@ -73,6 +73,9 @@ class WorkerSettings:
     functions = [ingest_document, hello]
     redis_settings = REDIS
     max_jobs = 2
+    # No stored results: nothing reads them, and a kept result would block
+    # re-queuing a failed document under its job id (see enqueue_ingest).
+    keep_result = 0
     # A backstop only: leaves ingest_document time to stop a child that hits
     # JOB_TIMEOUT and record the failure before arq cancels it.
     job_timeout = JOB_TIMEOUT + 60
