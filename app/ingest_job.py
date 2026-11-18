@@ -46,7 +46,6 @@ def ingest(document_id: str, uid: str):
         session_date = doc.session_date
         storage_path = doc.storage_path
         doc_type = doc.doc_type
-        file_hash = doc.file_hash
 
     # The API and the worker are separate containers, so the only copy of the
     # file they share is the one in Supabase Storage.
@@ -86,7 +85,7 @@ def ingest(document_id: str, uid: str):
         print(f"worker: {doc_id} embedded {len(vectors)} chunks "
               f"in {time.perf_counter() - t0:.1f}s")
 
-        store_chunks(chunks, vectors, str(user_id), file_hash)   # one transaction
+        store_chunks(chunks, vectors, str(user_id), doc_id)   # one transaction
         _set_status(doc_id, "ready", uid=uid, page_count=len(pages))
         print(f"ingested {doc_id}: {len(chunks)} chunks from {len(pages)} pages "
               f"in {time.perf_counter() - started:.1f}s total")

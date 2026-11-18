@@ -3,6 +3,7 @@ import re
 import uuid
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 import pymupdf
 from fastapi import (
@@ -32,7 +33,10 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 # from Supabase Storage, since it runs in a different container.
 UPLOAD_DIR = Path("data/uploads")
 
-SESSION_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+# Matches Supabase Storage's default per-file limit.
+MAX_UPLOAD_BYTES = 50_000_000
+
+SESSION_DATE_RE =re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
 
 def parse_session_date(filename: str | None) -> date | None:
@@ -59,13 +63,18 @@ async def upload(
     request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
-    doc_type: str = Form(...),
+    doc_type: Literal["ruleset", "transcript"] = Form(...),
     db: Session = Depends(get_db_for_user),
     user_id: uuid.UUID = Depends(get_current_user),
 ):
     ext = Path(file.filename).suffix.lower()
     if not ext.endswith((".pdf", ".md")):
         raise HTTPException(400, "only PDF and md files are supported")
+
+    # Starlette has spooled the upload to disk by now; read() would put all of
+    # it in memory, so a huge file could take the API down for everyone.
+    if file.size is None or file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"files are limited to {MAX_UPLOAD_BYTES // 1_000_000} MB")
 
     data = await file.read()
 
@@ -74,9 +83,22 @@ async def upload(
 
     #send the document to cloud storage (Supabase) instead of local storage
 
-    doc_id = uuid.uuid4()
     file_hash = hashlib.sha256(data).hexdigest()
+    redis = request.app.state.redis
 
+    # Checked before the storage upload, so a repeat upload leaves no orphan file.
+    existing = (db.query(Document)
+                  .filter(Document.user_id == user_id, Document.file_hash == file_hash)
+                  .first())
+    if existing is not None:
+        if existing.status == "ready":
+            return DocumentCreated(id=existing.id, status="ready")
+        # pending, processing or failed: queue it again. If a job for it is
+        # still queued or running, enqueue_ingest is a no-op.
+        await enqueue_ingest(redis, existing.id, user_id)
+        return DocumentCreated(id=existing.id, status="pending")
+
+    doc_id = uuid.uuid4()
     cloud_path = upload_pdf(user_id, doc_id, data)
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -92,12 +114,22 @@ async def upload(
     session_date = parse_session_date(file.filename)
 
     doc_id, pending = store_document(cloud_path, str(user_id), doc_type, title, pages_no, str(doc_id), file_hash, session_date)
-    redis = request.app.state.redis
-    if pending:
-        job = await redis.enqueue_job("ingest_document", str(doc_id), str(user_id))
-    else:
+    if not pending:
         return DocumentCreated(id=doc_id, status="ready")
+    await enqueue_ingest(redis, doc_id, user_id)
     return DocumentCreated(id=doc_id, status="pending")
+
+
+async def enqueue_ingest(redis, doc_id, user_id) -> None:
+    """Queue ingestion, at most one job per document at a time.
+
+    arq refuses a job whose id is already queued or running, so a repeat
+    upload can't start a second job that stores every chunk twice.
+    WorkerSettings.keep_result = 0 lets the id be reused once the job ends,
+    so a failed document can still be retried.
+    """
+    await redis.enqueue_job("ingest_document", str(doc_id), str(user_id),
+                            _job_id=f"ingest:{doc_id}")
 
 @router.get("/download/{doc_id}", response_model=DownloadLinkOut)
 @limiter.limit("10/minute")

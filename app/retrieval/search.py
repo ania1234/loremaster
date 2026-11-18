@@ -117,6 +117,12 @@ def vector_search(user_id: uuid.UUID, structured_query: StructuredQuery,
         {"qvec": str(qvec), "uid": str(user_id), "k": k},
     )
     with session_for_user(user_id) as session:
+        # The HNSW index is shared by all users and by default yields only
+        # ~40 nearest chunks before the user_id filter runs. Onboarding gives
+        # every user identical copies of the sample chunks, so those 40 can
+        # all be other users' copies, leaving this user with nothing.
+        # Iterative scan (pgvector >= 0.8) keeps scanning until k rows pass.
+        session.execute(text("SET LOCAL hnsw.iterative_scan = strict_order"))
         rows = session.execute(stmt, params).mappings().all()
     return [dict(r) for r in rows]
 

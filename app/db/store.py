@@ -43,7 +43,7 @@ def store_document(path: str, user_id: str, doc_type: str, title: str, pages_no:
             else:
                 return document.id, True
                     
-def store_chunks(chunks: list[Chunk], embeddings: list[list[float]], user_id: str, file_hash: str) -> None:
+def store_chunks(chunks: list[Chunk], embeddings: list[list[float]], user_id: str, doc_id) -> None:
     """Insert all chunks and mark the document ready, in one transaction.
 
     Raises on failure (after rolling back) so the caller can record the error.
@@ -52,11 +52,8 @@ def store_chunks(chunks: list[Chunk], embeddings: list[list[float]], user_id: st
     """
     with session_for_user(user_id) as session:
         try:
-            document = (
-                session.query(Document)
-                .filter_by(user_id=user_id, file_hash=file_hash)
-                .first()
-            )
+            # By id, not hash: the hash isn't unique, and the job knows its document.
+            document = session.get(Document, doc_id)
             if document is None:
                 raise ValueError("Document not found in database")
             if document.status == "ready":
